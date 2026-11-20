@@ -1,0 +1,183 @@
+"""HTTP 레벨 테스트 — FastAPI 가 설치된 환경(Codespaces 등)에서 실행된다."""
+
+from __future__ import annotations
+
+from io import BytesIO
+
+import pytest
+
+pytest.importorskip("fastapi")
+pytest.importorskip("httpx")
+
+from fastapi.testclient import TestClient  # noqa: E402
+from openpyxl import load_workbook  # noqa: E402
+
+from app.config import AppConfig  # noqa: E402
+from app.core.sheets import MemoryBackend  # noqa: E402
+from app.integrations.claude_client import ClaudeClient  # noqa: E402
+from app.main import create_app  # noqa: E402
+
+from .test_parser_and_matching import SAMPLE  # noqa: E402
+
+
+@pytest.fixture
+def client():
+    cfg = AppConfig(
+        app_env="test", sheets_backend="memory", sheets_cache_ttl=0, admin_pin="2580", auth_secret="x" * 40,
+        seed_demo_data=False,
+    )
+    app = create_app(cfg, backend=MemoryBackend(), claude=ClaudeClient("", "m"))
+    with TestClient(app) as c:
+        from app.demo_data import seed_basics
+
+        seed_basics(app.state.ctx)
+        tok = c.post("/api/auth/pin", json={"pin": "2580"}).json()["token"]
+        c.headers.update({"Authorization": f"Bearer {tok}"})
+        yield c
+
+
+def test_health_and_features(client):
+    assert client.get("/api/health").json()["ok"] is True
+    f = client.get("/api/system/features").json()
+    assert [m["name"] for m in f["modules"]][:3] == ["q1_masters", "q1_orders", "q1_shipping"]
+    assert len(f["modules"]) == 11
+    assert f["ai_parser"] is False and f["auth_required"] is True
+
+
+def test_auth_required():
+    cfg = AppConfig(app_env="test", admin_pin="2580", auth_secret="x" * 40)
+    app = create_app(cfg, backend=MemoryBackend(), claude=ClaudeClient("", "m"))
+    with TestClient(app) as c:
+        r = c.get("/api/orders")
+        assert r.status_code == 401 and r.json()["error"] == "unauthorized"
+        assert c.post("/api/auth/pin", json={"pin": "0000"}).status_code == 401
+
+
+def test_full_q1_flow(client):
+    draft = client.post("/api/orders/parse", json={"text": SAMPLE}).json()
+    assert draft["parser"] == "rule" and draft["customer"]["customer_id"] == "C0001"
+    items = [{"sku": i["sku"], "qty": i["qty"]} for i in draft["items"]]
+
+    r = client.post(
+        "/api/orders",
+        json={"customer_id": "C0001", "items": items, "due_date": draft["due_date"], "note": draft["note"], "raw_text": SAMPLE},
+    )
+    assert r.status_code == 201, r.text
+    order = r.json()
+    oid = order["order_id"]
+    assert order["ship_method"] == "택배"
+
+    big = client.post("/api/orders", json={"customer_id": "C0001", "items": [{"sku": "CHI-10KG", "qty": 6}]}).json()
+    assert big["ship_method"] == "화물"
+
+    board = client.get("/api/shipping/board").json()
+    assert [o["order_id"] for o in board["parcel"]] == [oid]
+    assert [o["order_id"] for o in board["truck"]] == [big["order_id"]]
+
+    x = client.post("/api/shipping/parcel-export", json={})
+    assert x.status_code == 200 and x.headers["x-order-count"] == "1"
+    ws = load_workbook(BytesIO(x.content)).active
+    assert ws.max_row == 2
+
+    t = client.get(f"/api/shipping/{big['order_id']}/dispatch-text").json()["text"]
+    assert "[화물 배차 요청]" in t
+
+    shipped = client.post(f"/api/shipping/{oid}/ship").json()
+    assert shipped["status"] == "출고완료"
+    assert len(client.get("/api/shipping/board").json()["parcel"]) == 0
+
+    summary = client.get("/api/production/summary").json()
+    assert summary["truck_count"] == 1 and summary["parcel_count"] == 0
+
+
+def test_validation_message_is_korean(client):
+    r = client.post("/api/orders", json={"customer_id": "C0001", "items": []})
+    assert r.status_code == 422 and "품목" in r.json()["message"]
+
+
+def test_masters_crud(client):
+    c = client.post("/api/customers", json={"name": "새마을식당", "phone": "010-7777-8888"}).json()
+    assert c["customer_id"] == "C0003"
+    assert client.post("/api/customers", json={"name": "새마을식당"}).status_code == 422
+    c = client.patch(f"/api/customers/{c['customer_id']}", json={"active": False}).json()
+    assert c["active"] is False
+    assert all(x["name"] != "새마을식당" for x in client.get("/api/customers").json())
+
+    p = client.post("/api/products", json={"name": "참깨", "spec": "1kg", "unit_kg": 1.05}).json()
+    assert p["sku"] == "P0001"
+    s = client.put("/api/settings", json={"threshold_kg": 70}).json()
+    assert s["threshold_kg"] == 70
+
+
+def test_job_endpoint_requires_secret():
+    cfg = AppConfig(app_env="test", job_secret="j" * 20)
+    app = create_app(cfg, backend=MemoryBackend(), claude=ClaudeClient("", "m"))
+    app.state.ctx.jobs.register("ping", lambda ctx: {"pong": True})
+    with TestClient(app) as c:
+        assert c.post("/api/jobs/ping").status_code == 401
+        assert c.post("/api/jobs/ping", headers={"X-Job-Secret": "j" * 20}).json() == {"ok": True, "pong": True}
+
+
+# ---------------------------------------------------------------- 2~4분기 HTTP
+def _xlsx(rows):
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    for r in rows:
+        wb.active.append(r)
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_public_self_order_flow(client):
+    link = client.post("/api/customers/C0001/order-link").json()
+    token = link["token"]
+    public = TestClient(client.app)  # 로그인 없이
+    form = public.get(f"/api/public/order-form/{token}").json()
+    assert form["customer_name"] == "한솥식당"
+    r = public.post(f"/api/public/orders/{token}", json={"items": [{"sku": "SES-18L", "qty": 2}]})
+    assert r.status_code == 201, r.text
+    assert public.get(f"/api/public/orders/{token}").json()[0]["order_id"] == r.json()["order_id"]
+    assert public.get("/api/public/order-form/" + "x" * 24).status_code == 404
+
+
+def test_tracking_upload_and_settlement_pdf(client):
+    o = client.post("/api/orders", json={"customer_id": "C0001", "items": [{"sku": "SES-18L", "qty": 1}]}).json()
+    data = _xlsx([["받는분", "운송장번호", "주문번호"], ["김사장", "123456789012", o["order_id"]]])
+    p = client.post(
+        "/api/tracking/import",
+        files={"file": ("t.xlsx", data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        data={"carrier": "CJ대한통운"},
+    ).json()
+    assert p["matched"] == 1
+    r = client.post(f"/api/tracking/import/{p['import_id']}/confirm", json={"carrier": "CJ대한통운"}).json()
+    assert r["registered"] == 1
+
+    from app.core.timeutil import today
+    from app.modules.q4_settlement.service import prev_period
+
+    period = f"{today():%Y-%m}"
+    g = client.post("/api/settlements/generate", json={"period": period}).json()
+    sid = g["settlements"][0]["settlement_id"]
+    pdf = client.get(f"/api/settlements/{sid}/pdf")
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+    url = client.get(f"/api/settlements/{sid}/link").json()["url"]
+    token = url.rsplit("/", 1)[1]
+    assert TestClient(client.app).get(f"/api/public/statements/{token}").status_code == 200
+    assert prev_period(today())
+
+
+def test_inventory_reorder_briefing_endpoints(client):
+    assert len(client.get("/api/inventory").json()) == 9
+    assert client.get("/api/reorder/stats").status_code == 200
+    b = client.get("/api/briefing/preview").json()
+    assert b["text"].startswith("🏭")
+    st = client.get("/api/integrations/kakao/status").json()
+    assert st["configured"] is False and st["redirect_uri"].endswith("/api/integrations/kakao/callback")
+    assert client.get("/api/system/status").json()["integration_warnings"]
+
+
+def test_kakao_callback_rejects_bad_state(client):
+    r = TestClient(client.app).get("/api/integrations/kakao/callback?code=x&state=bad", follow_redirects=False)
+    assert r.status_code in (302, 307) and "kakao=fail" in r.headers["location"]

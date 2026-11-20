@@ -1,0 +1,68 @@
+# Render Blueprint — 저장소 루트에 있어야 Render 가 자동으로 찾습니다.
+services:
+  - type: web
+    name: factory-ops-api
+    runtime: python
+    rootDir: backend
+    plan: free            # 콜드스타트가 불편하면 starter 로 변경
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: APP_ENV
+        value: prod
+      - key: PUBLIC_WEB_URL
+        sync: false
+      - key: PUBLIC_API_URL
+        sync: false
+      - key: SHEETS_BACKEND
+        value: gspread
+      - key: GOOGLE_SPREADSHEET_ID
+        sync: false
+      - key: SYSTEM_SPREADSHEET_ID
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        value: claude-haiku-5-5
+      - key: KAKAO_REST_API_KEY
+        sync: false
+      - key: KAKAO_CLIENT_SECRET
+        sync: false
+      - key: SOLAPI_API_KEY
+        sync: false
+      - key: SOLAPI_API_SECRET
+        sync: false
+      - key: SOLAPI_SENDER
+        sync: false
+      - key: SOLAPI_PFID
+        sync: false
+      - key: SOLAPI_TPL_PARCEL
+        sync: false
+      - key: SOLAPI_TPL_TRUCK
+        sync: false
+      - key: SOLAPI_TPL_STATEMENT
+        sync: false
+      - key: SOLAPI_TPL_ORDER_RECEIVED
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: ADMIN_PIN
+        sync: false
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: JOB_SECRET
+        generateValue: true
+      - key: FRONTEND_ORIGINS
+        sync: false
