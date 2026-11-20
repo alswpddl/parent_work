@@ -1,0 +1,14 @@
+# 운영 의존성 (Render 빌드에서 설치)
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+gspread>=6.1
+google-auth>=2.29
+anthropic>=0.40
+openpyxl>=3.1
+PyJWT>=2.8
+python-multipart>=0.0.9   # 3분기 엑셀 업로드용
+python-dotenv>=1.0
+
+# 내부 스케줄러를 쓸 때만 (유료 서버로 옮긴 뒤 ENABLE_INTERNAL_SCHEDULER=true)
+# APScheduler>=3.10,<4

@@ -1,0 +1,82 @@
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
+
+TaxType = Literal["과세", "면세", ""]
+
+
+class ProductBase(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    spec: str = Field(default="", max_length=30)
+    aliases: str = ""
+    unit: str = "개"
+    unit_kg: float = Field(default=0, ge=0, le=2000)
+    units_per_box: int | None = Field(default=None, ge=1, le=1000)
+    unit_price: int | None = Field(default=None, ge=0)
+    # 4분기: 세금·자재 매핑
+    tax_type: TaxType = ""
+    container_item: str = ""
+    box_item: str = ""
+    label_item: str = ""
+
+    @field_validator("name", "spec", "aliases", "unit", "container_item", "box_item", "label_item", mode="before")
+    @classmethod
+    def _strip(cls, v):
+        return (v or "").strip()
+
+
+class ProductCreate(ProductBase):
+    sku: str | None = Field(default=None, max_length=30, description="비우면 P0001 형식으로 자동 발급")
+
+
+class ProductPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    spec: str | None = None
+    aliases: str | None = None
+    unit: str | None = None
+    unit_kg: float | None = Field(default=None, ge=0, le=2000)
+    units_per_box: int | None = Field(default=None, ge=1, le=1000)
+    unit_price: int | None = Field(default=None, ge=0)
+    active: bool | None = None
+    tax_type: TaxType | None = None
+    container_item: str | None = None
+    box_item: str | None = None
+    label_item: str | None = None
+
+
+class ProductOut(ProductBase):
+    sku: str
+    active: bool = True
+
+    @property
+    def display_name(self) -> str:
+        return f"{self.name} {self.spec}".strip()
+
+    @property
+    def is_taxable(self) -> bool:
+        """비어 있으면 과세로 본다 (가공식품 대부분이 과세)."""
+        return self.tax_type != "면세"
+
+    @classmethod
+    def from_row(cls, d: dict) -> "ProductOut":
+        tax = d.get("tax_type") or ""
+        return cls(
+            sku=d["sku"],
+            name=d.get("name") or "(이름 없음)",
+            spec=d.get("spec") or "",
+            aliases=d.get("aliases") or "",
+            unit=d.get("unit") or "개",
+            unit_kg=max(0.0, float(d.get("unit_kg") or 0)),
+            units_per_box=d.get("units_per_box") if (d.get("units_per_box") or 0) >= 1 else None,
+            unit_price=d.get("unit_price") if (d.get("unit_price") or 0) >= 0 else None,
+            active=d.get("active") is not False,
+            tax_type=tax if tax in ("과세", "면세") else "",  # type: ignore[arg-type]
+            container_item=d.get("container_item") or "",
+            box_item=d.get("box_item") or "",
+            label_item=d.get("label_item") or "",
+        )
+
+    def alias_list(self) -> list[str]:
+        return [a.strip() for a in self.aliases.replace("，", ",").split(",") if a.strip()]
