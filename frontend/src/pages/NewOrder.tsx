@@ -10,9 +10,9 @@ import { Alert, Button, Card, LoadState, PageHeader, Textarea } from "../compone
 import { useFeatures } from "../lib/features";
 import { useAsync } from "../lib/hooks";
 
-const SAMPLE = `안녕하세요 사장님~ 한솥식당입니다
-참기름 1.8L 10개, 들기름 1.8리터 5통
-고춧가루 5키로 2개 부탁드려요
+const SAMPLE = `안녕하세요 사장님~ 바다식당입니다
+새우젓 1키로 10통, 명란 500g 4개
+액젓 9kg 2말 부탁드려요
 금요일까지 받을 수 있을까요? 오전에 와주세요`;
 
 export default function NewOrder() {

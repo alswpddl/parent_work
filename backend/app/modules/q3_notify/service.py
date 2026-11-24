@@ -162,7 +162,7 @@ class NotifyService:
 
     def on_created(self, payload: dict) -> None:
         o: OrderOut = payload["order"]
-        if o.source != "셀프주문" or not self.template_id("order_received"):
+        if o.source not in ("셀프주문", "웹주문서") or not self.template_id("order_received"):
             return
         phone, skip = self._recipient(o)
         if skip:

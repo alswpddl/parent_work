@@ -67,7 +67,7 @@ export default function Home() {
         </Link>
       </div>
 
-      <Card title="🔨 내일까지 만들 물량">
+      <Card title="🔨 내일까지 만들 물량" actions={<Link to="/today"><Button size="sm" variant="ghost">할당량 체크하기</Button></Link>}>
         <LoadState loading={prod.loading} error={prod.error} />
         {prod.data && prod.data.lines.length === 0 && <Empty>만들 물량이 없어요.</Empty>}
         <div className="flex flex-wrap gap-2">

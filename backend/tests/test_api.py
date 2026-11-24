@@ -28,7 +28,7 @@ def client():
     )
     app = create_app(cfg, backend=MemoryBackend(), claude=ClaudeClient("", "m"))
     with TestClient(app) as c:
-        from app.demo_data import seed_basics
+        from tests.fixtures import seed_test_basics as seed_basics
 
         seed_basics(app.state.ctx)
         tok = c.post("/api/auth/pin", json={"pin": "2580"}).json()["token"]
@@ -40,7 +40,7 @@ def test_health_and_features(client):
     assert client.get("/api/health").json()["ok"] is True
     f = client.get("/api/system/features").json()
     assert [m["name"] for m in f["modules"]][:3] == ["q1_masters", "q1_orders", "q1_shipping"]
-    assert len(f["modules"]) == 11
+    assert len(f["modules"]) == 12
     assert f["ai_parser"] is False and f["auth_required"] is True
 
 
@@ -181,3 +181,24 @@ def test_inventory_reorder_briefing_endpoints(client):
 def test_kakao_callback_rejects_bad_state(client):
     r = TestClient(client.app).get("/api/integrations/kakao/callback?code=x&state=bad", follow_redirects=False)
     assert r.status_code in (302, 307) and "kakao=fail" in r.headers["location"]
+
+
+def test_public_web_order_flow(client):
+    public = TestClient(client.app)  # 로그인 없이
+    info = public.get("/api/public/shop").json()
+    assert info["products"] and "개인정보" in info["privacy_text"]
+    body = {
+        "name": "김영희", "phone": "010-7777-8888", "address": "서울시 마포구 월드컵로 1",
+        "items": [{"sku": "SES-18L", "qty": 2}], "agree_privacy": True,
+    }
+    r = public.post("/api/public/shop/orders", json=body, headers={"X-Forwarded-For": "5.5.5.5"})
+    assert r.status_code == 201, r.text
+    oid = r.json()["order_id"]
+    look = public.get("/api/public/shop/orders/lookup", params={"order_id": oid, "phone4": "8888"})
+    assert look.status_code == 200 and look.json()["order_id"] == oid
+    assert public.get("/api/public/shop/orders/lookup", params={"order_id": oid, "phone4": "0000"}).status_code == 404
+    bad = public.post("/api/public/shop/orders", json={**body, "agree_privacy": False})
+    assert bad.status_code == 422
+    # 관리자 쪽에서는 웹주문서 경로로 보인다
+    orders = client.get("/api/orders").json()["orders"]
+    assert any(o["order_id"] == oid and o["source"] == "웹주문서" for o in orders)

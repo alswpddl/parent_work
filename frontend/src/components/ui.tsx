@@ -1,5 +1,5 @@
 // 큰 글씨·큰 버튼 위주의 공통 UI 조각
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { Check, Copy, Loader2, Minus, Plus, Upload, X } from "lucide-react";
 import { copyText } from "../lib/clipboard";
 
@@ -207,9 +207,9 @@ export function Field({ label, hint, children, className }: { label: ReactNode; 
   );
 }
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={cx(inputCls, props.className)} />;
-}
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(props, ref) {
+  return <input ref={ref} {...props} className={cx(inputCls, props.className)} />;
+});
 
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className={cx(inputCls, "pr-8", props.className)} />;

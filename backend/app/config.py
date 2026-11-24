@@ -42,6 +42,7 @@ ALL_MODULES = [
     "q1_orders",
     "q1_shipping",
     "q2_self_order",
+    "q2_web_order",
     "q2_briefing",
     "q3_tracking",
     "q3_notify",

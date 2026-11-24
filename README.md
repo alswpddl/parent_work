@@ -10,7 +10,7 @@
 | 분기 | 모듈 | 하는 일 |
 |---|---|---|
 | 1 | `q1_masters` `q1_orders` `q1_shipping` | 카톡 주문 AI 정리, 주문장 저장, 택배/화물 자동 분기, 택배 엑셀, 배차 문자 |
-| 2 | `q2_self_order` `q2_briefing` | 거래처 전용 주문 링크(/order/…), 매일 아침 부모님 카톡 브리핑, 카카오 연결 |
+| 2 | `q2_self_order` `q2_web_order` `q2_briefing` | 거래처 전용 주문 링크(/order/…), 누구나 주문하는 웹 주문서(/shop) + 오늘의 할당량(/today), 매일 아침 부모님 카톡 브리핑, 카카오 연결 |
 | 3 | `q3_tracking` `q3_notify` `q3_marketplace` | 송장 엑셀 역등록, 화물 차량정보, 거래처 출고 알림톡, 스마트스토어·쿠팡 엑셀 수집 |
 | 4 | `q4_inventory` `q4_settlement` `q4_reorder` | 자재 자동 차감·경고·소진 예측, 거래명세표 PDF·발송·수금, 단골 발주주기 리마인드 |
 

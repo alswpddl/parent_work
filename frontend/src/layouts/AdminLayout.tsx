@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Boxes, ClipboardPaste, Home, LogOut, Menu, ReceiptText, Settings, ShoppingBag, Truck, ListOrdered, PhoneCall, Loader2 } from "lucide-react";
+import { Boxes, ClipboardCheck, ClipboardPaste, Home, LogOut, Menu, ReceiptText, Settings, ShoppingBag, Truck, ListOrdered, PhoneCall, Loader2 } from "lucide-react";
 import { setToken } from "../api/client";
 import { cx } from "../components/ui";
 import { useFeatures } from "../lib/features";
@@ -15,10 +15,11 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: "/", label: "홈", icon: <Home className="h-6 w-6" />, mobile: true },
+  { to: "/today", label: "오늘 할당량", icon: <ClipboardCheck className="h-6 w-6" />, mobile: true },
   { to: "/orders/new", label: "주문 넣기", icon: <ClipboardPaste className="h-6 w-6" />, mobile: true },
   { to: "/shipping", label: "출고", icon: <Truck className="h-6 w-6" />, mobile: true },
   { to: "/orders", label: "주문 목록", icon: <ListOrdered className="h-6 w-6" /> },
-  { to: "/inventory", label: "자재 재고", icon: <Boxes className="h-6 w-6" />, module: "q4_inventory", mobile: true },
+  { to: "/inventory", label: "자재 재고", icon: <Boxes className="h-6 w-6" />, module: "q4_inventory" },
   { to: "/settlements", label: "월말 정산", icon: <ReceiptText className="h-6 w-6" />, module: "q4_settlement" },
   { to: "/reorder", label: "리마인드", icon: <PhoneCall className="h-6 w-6" />, module: "q4_reorder" },
   { to: "/marketplace", label: "오픈마켓", icon: <ShoppingBag className="h-6 w-6" />, module: "q3_marketplace" },

@@ -18,14 +18,17 @@ import Settings from "./pages/Settings";
 import Settlements from "./pages/Settlements";
 import Shipping from "./pages/Shipping";
 import SelfOrder from "./pages/public/SelfOrder";
+import Shop from "./pages/public/Shop";
+import Today from "./pages/Today";
 
 export default function App() {
   const location = useLocation();
-  // 거래처 셀프주문 화면은 로그인·기능목록 없이 바로 띄운다
-  if (location.pathname.startsWith("/order/")) {
+  // 고객용 화면(거래처 셀프주문, 웹 주문서)은 로그인·기능목록 없이 바로 띄운다
+  if (location.pathname.startsWith("/order/") || location.pathname === "/shop" || location.pathname.startsWith("/shop/")) {
     return (
       <Routes>
         <Route path="/order/:token" element={<SelfOrder />} />
+        <Route path="/shop/*" element={<Shop />} />
       </Routes>
     );
   }
@@ -68,6 +71,7 @@ function AdminApp() {
       <Routes>
         <Route element={<AdminLayout onLogout={() => setAuthed(false)} />}>
           <Route index element={<Home />} />
+          <Route path="today" element={<Today />} />
           <Route path="orders/new" element={<NewOrder />} />
           <Route path="orders" element={<Orders />} />
           <Route path="shipping" element={<Shipping />} />
