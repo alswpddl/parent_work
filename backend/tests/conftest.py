@@ -30,7 +30,7 @@ def backend() -> MemoryBackend:
 
 @pytest.fixture
 def ctx(config, backend):
-    from app.demo_data import seed_basics
+    from tests.fixtures import seed_test_basics as seed_basics
 
     c = build_context(config, backend=backend, claude=ClaudeClient("", "test-model"))
     bootstrap(c)
@@ -142,7 +142,7 @@ def http():
 def full_ctx(http):
     from app.config import ALL_MODULES
     from app.core.timeutil import now
-    from app.demo_data import seed_basics
+    from tests.fixtures import seed_test_basics as seed_basics
     from app.modules import load_modules, register_without_app
 
     FakeSMTP.sent = []

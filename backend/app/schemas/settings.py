@@ -20,6 +20,11 @@ SETTING_DEFS: list[tuple[str, str, str, str]] = [
     ("self_order_lead_days", "셀프주문 최소 준비일", "1", "오늘로부터 며칠 뒤부터 납기일로 고를 수 있는지"),
     ("self_order_notice", "셀프주문 안내 문구", "", "거래처 주문 화면 맨 위에 보이는 문구"),
     ("notify_new_self_order", "셀프주문 들어오면 카톡 알림", "예", "예 / 아니오"),
+    # --- 웹 주문서 (/shop)
+    ("shop_enabled", "웹 주문서 받기", "예", "예 / 아니오 — 아니오면 주문서 화면에 '지금은 주문을 받지 않아요' 표시"),
+    ("shop_show_prices", "웹 주문서에 가격 보이기", "예", "예 / 아니오"),
+    ("shop_notice", "웹 주문서 안내 문구", "", "주문서 맨 위에 보이는 문구 (예: 오후 2시 전 주문은 당일 출고)"),
+    ("privacy_retention", "개인정보 보관 기간", "주문일로부터 1년", "웹 주문서 개인정보 동의 문구에 표시"),
     # --- 3분기: 알림톡
     ("notify_customers", "거래처 출고 알림톡 보내기", "예", "예 / 아니오"),
     # --- 4분기: 재고·정산·리마인드
@@ -51,6 +56,10 @@ class AppSettings(BaseModel):
     self_order_lead_days: int = Field(default=1, ge=0, le=30)
     self_order_notice: str = ""
     notify_new_self_order: bool = True
+    shop_enabled: bool = True
+    shop_show_prices: bool = True
+    shop_notice: str = ""
+    privacy_retention: str = "주문일로부터 1년"
     notify_customers: bool = True
     stock_alert_enabled: bool = True
     stock_lead_days: int = Field(default=5, ge=0, le=90)
@@ -63,7 +72,10 @@ class AppSettings(BaseModel):
     reorder_factor: float = Field(default=1.3, ge=1.0, le=5.0)
     reorder_min_orders: int = Field(default=3, ge=2, le=50)
 
-    @field_validator("briefing_enabled", "notify_new_self_order", "notify_customers", "stock_alert_enabled", mode="before")
+    @field_validator(
+        "briefing_enabled", "notify_new_self_order", "shop_enabled", "shop_show_prices", "notify_customers",
+        "stock_alert_enabled", mode="before",
+    )
     @classmethod
     def _yes_no(cls, v):
         if isinstance(v, bool):
@@ -84,6 +96,10 @@ class SettingsPatch(BaseModel):
     self_order_lead_days: int | None = Field(default=None, ge=0, le=30)
     self_order_notice: str | None = None
     notify_new_self_order: bool | None = None
+    shop_enabled: bool | None = None
+    shop_show_prices: bool | None = None
+    shop_notice: str | None = None
+    privacy_retention: str | None = Field(default=None, max_length=60)
     notify_customers: bool | None = None
     stock_alert_enabled: bool | None = None
     stock_lead_days: int | None = Field(default=None, ge=0, le=90)

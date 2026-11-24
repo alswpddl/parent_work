@@ -54,6 +54,10 @@ export interface AppSettings {
   statement_note: string;
   reorder_factor: number;
   reorder_min_orders: number;
+  shop_enabled: boolean;
+  shop_show_prices: boolean;
+  shop_notice: string;
+  privacy_retention: string;
 }
 
 export interface Customer {
@@ -88,6 +92,8 @@ export interface Product {
   unit_kg: number;
   units_per_box: number | null;
   unit_price: number | null;
+  description: string;
+  shop_visible: boolean;
   tax_type: "과세" | "면세" | "";
   container_item: string;
   box_item: string;
@@ -428,4 +434,50 @@ export interface ReorderStat {
   due: boolean;
   snoozed_until: string | null;
   last_items: string;
+}
+
+// ---------------------------------------------------------------- 웹 주문서 (/shop)
+export interface ShopProduct {
+  sku: string;
+  name: string;
+  spec: string;
+  unit: string;
+  unit_kg: number;
+  price: number | null;
+  description: string;
+}
+
+export interface ShopInfo {
+  factory_name: string;
+  factory_phone: string;
+  notice: string;
+  show_prices: boolean;
+  bank_account: string;
+  min_due_date: string;
+  privacy_text: string;
+  products: ShopProduct[];
+}
+
+export interface GuestOrderInput {
+  name: string;
+  company: string;
+  phone: string;
+  address: string;
+  zipcode: string;
+  due_date: string | null;
+  note: string;
+  items: { sku: string; qty: number }[];
+  agree_privacy: boolean;
+  website: string;
+}
+
+export interface GuestOrderResult {
+  order_id: string;
+  created_at: string;
+  items: string;
+  due_date: string;
+  ship_method: string;
+  estimated_total: number | null;
+  bank_account: string;
+  factory_phone: string;
 }

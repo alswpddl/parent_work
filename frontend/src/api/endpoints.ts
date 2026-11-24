@@ -9,6 +9,8 @@ import type {
   CustomerInput,
   Features,
   GenerateResult,
+  GuestOrderInput,
+  GuestOrderResult,
   InventoryItem,
   KakaoStatus,
   MarketMapping,
@@ -29,6 +31,7 @@ import type {
   PublicOrder,
   ReorderStat,
   SendResult,
+  ShopInfo,
   Settlement,
   StockMove,
   SystemStatus,
@@ -79,6 +82,10 @@ export const revokeOrderLink = (customerId: string) => api<void>(`/api/customers
 export const publicForm = (token: string) => api<PublicForm>(`/api/public/order-form/${token}`, { auth: false });
 export const publicPlaceOrder = (token: string, body: { items: { sku: string; qty: number }[]; due_date: string | null; note: string; address: string }) =>
   api<PublicOrder>(`/api/public/orders/${token}`, { body, auth: false });
+export const shopInfo = () => api<ShopInfo>("/api/public/shop", { auth: false });
+export const shopPlaceOrder = (body: GuestOrderInput) => api<GuestOrderResult>("/api/public/shop/orders", { body, auth: false });
+export const shopLookup = (orderId: string, phone4: string) =>
+  api<PublicOrder>("/api/public/shop/orders/lookup", { query: { order_id: orderId, phone4 }, auth: false });
 export const publicRecent = (token: string) => api<PublicOrder[]>(`/api/public/orders/${token}`, { auth: false });
 
 export const briefingPreview = () => api<Briefing>("/api/briefing/preview");

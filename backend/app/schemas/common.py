@@ -8,7 +8,7 @@ ShipMethod = Literal["택배", "화물"]
 MethodBy = Literal["자동", "수동", "거래처기본"]
 DefaultMethod = Literal["자동", "택배", "화물"]
 OrderStatus = Literal["접수", "출고대기", "출고완료", "취소"]
-OrderSource = Literal["카톡", "셀프주문", "스마트스토어", "쿠팡", "직접"]
+OrderSource = Literal["카톡", "셀프주문", "웹주문서", "스마트스토어", "쿠팡", "직접"]
 CustomerType = Literal["B2B", "B2C"]
 
 OPEN_STATUSES: tuple[str, ...] = ("접수", "출고대기")

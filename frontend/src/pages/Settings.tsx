@@ -76,7 +76,8 @@ export default function Settings() {
 // ================================================================ 공장·설정
 function BasicTab() {
   const toast = useToast();
-  const { has } = useFeatures();
+  const { has, features } = useFeatures();
+  const shopUrl = `${(features?.public_web_url || window.location.origin).replace(/\/$/, "")}/shop`;
   const s = useAsync(getSettings, []);
   const [v, setV] = useState<AppSettings | null>(null);
   const [busy, setBusy] = useState(false);
@@ -125,6 +126,23 @@ function BasicTab() {
           {number("self_order_lead_days", "최소 준비일", "오늘로부터 며칠 뒤부터 받는 날로 고를 수 있어요")}
           {text("self_order_notice", "주문 화면 안내 문구")}
           <Toggle checked={v.notify_new_self_order} onChange={(x) => set({ notify_new_self_order: x })} label="셀프주문 들어오면 카톡으로 알려주기" />
+        </Card>
+      )}
+      {has("q2_web_order") && (
+        <Card title="웹 주문서 (누구나 주문하는 사이트)">
+          <div className="mb-3 rounded-xl bg-brand-soft px-4 py-3 text-brand-dark">
+            <div className="text-sm">주문서 주소 — 카톡 프로필·문자·명함에 넣어 주세요</div>
+            <div className="break-all font-bold">{shopUrl}</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <CopyButton size="sm" variant="primary" label="주소 복사" text={`${v.factory_name || "저희 공장"} 주문서예요. 눌러서 주문해 주세요!\n${shopUrl}`} onCopied={(ok) => toast(ok ? "복사했어요. 카톡에 붙여넣으세요." : "복사가 막혔어요.", ok ? "ok" : "error")} />
+              <a href={shopUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-[38px] items-center rounded-xl2 border-2 border-line bg-white px-3 text-sm font-bold">미리 보기</a>
+            </div>
+          </div>
+          <Toggle checked={v.shop_enabled} onChange={(x) => set({ shop_enabled: x })} label="웹 주문 받기 (끄면 주문서가 닫혀요)" />
+          <Toggle checked={v.shop_show_prices} onChange={(x) => set({ shop_show_prices: x })} label="주문서에 가격 보이기" />
+          {text("shop_notice", "주문서 맨 위 안내 문구", "예) 오후 2시 전 주문은 다음 날 출고 · 입금 확인 후 발송")}
+          {text("privacy_retention", "개인정보 보관 기간", "주문서 동의 문구에 그대로 나와요")}
+          <p className="text-sm text-stone-500">받는 날은 위 '거래처 셀프 주문'의 최소 준비일을 같이 써요. 입금 계좌는 주문 완료 화면에 보여요.</p>
         </Card>
       )}
       <Card title="자동 알림">
@@ -254,7 +272,7 @@ function CustomerModal({ value, busy, onClose, onSave }: { value: Partial<Custom
     <Modal open wide onClose={onClose} title={v.customer_id ? `거래처 수정 · ${v.name}` : "거래처 추가"} footer={<Button block loading={busy} disabled={!v.name?.trim()} onClick={() => onSave(v)}>저장</Button>}>
       <div className="grid gap-x-3 md:grid-cols-2">
         {inp("name", "거래처 이름")}
-        {inp("aliases", "다른 이름 (쉼표로)", "카톡에서 부르는 이름. 예) 한솥, 한솥 사장님")}
+        {inp("aliases", "다른 이름 (쉼표로)", "카톡에서 부르는 이름. 예) 바다, 바다식당 사장님")}
         {inp("contact_name", "담당자")}
         {inp("phone", "휴대폰", "출고 알림톡을 받을 번호")}
       </div>
@@ -286,7 +304,7 @@ function CustomerModal({ value, busy, onClose, onSave }: { value: Partial<Custom
 }
 
 // ================================================================ 품목
-const EMPTY_PRODUCT: Partial<Product> = { name: "", spec: "", aliases: "", unit: "개", unit_kg: 0, units_per_box: null, unit_price: null, tax_type: "", container_item: "", box_item: "", label_item: "" };
+const EMPTY_PRODUCT: Partial<Product> = { name: "", spec: "", aliases: "", description: "", shop_visible: true, unit: "통", unit_kg: 0, units_per_box: null, unit_price: null, tax_type: "", container_item: "", box_item: "", label_item: "" };
 
 function ProductsTab() {
   const toast = useToast();
@@ -304,6 +322,7 @@ function ProductsTab() {
             <div className="text-lg font-extrabold">{p.name} {p.spec} <span className="text-sm font-normal text-stone-500">{p.sku}</span></div>
             <div className="flex gap-1">
               {p.tax_type && <Badge>{p.tax_type}</Badge>}
+              {has("q2_web_order") && !p.shop_visible && p.active && <Badge tone="amber">주문서 숨김</Badge>}
               {!p.active && <Badge>숨김</Badge>}
             </div>
           </div>
@@ -348,10 +367,10 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
     <Modal open wide onClose={onClose} title={isNew ? "품목 추가" : `품목 수정 · ${v.name} ${v.spec}`} footer={<Button block loading={busy} disabled={!v.name?.trim()} onClick={() => onSave(v)}>저장</Button>}>
       <div className="grid gap-x-3 md:grid-cols-2">
         {isNew && inp("sku", "품목코드", "비우면 P0001 처럼 자동")}
-        {inp("name", "품목 이름", "예) 참기름")}
-        {inp("spec", "규격", "카톡에 적히는 그대로. 예) 1.8L, 5kg")}
-        {inp("aliases", "다른 이름 (쉼표로)", "예) 참기름 큰거")}
-        {inp("unit", "단위", "통 / 병 / 봉")}
+        {inp("name", "품목 이름", "예) 새우젓(추젓)")}
+        {inp("spec", "규격", "카톡에 적히는 그대로. 예) 1kg, 500g")}
+        {inp("aliases", "다른 이름 (쉼표로)", "예) 새우젓 큰통, 추젓")}
+        {inp("unit", "단위", "통 / 병 / 말통")}
         {inp("unit_kg", "1개 무게 (kg, 포장 포함)", undefined, "number")}
         {inp("units_per_box", "한 박스에 몇 개", "택배 박스 수·박스 자재 계산", "number")}
         {inp("unit_price", "공급 단가 (원, 부가세 별도)", "월말 정산에 써요", "number")}
@@ -373,6 +392,12 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
             {inp("box_item", "박스", "박스당 1")}
             {inp("label_item", "라벨", "1개당 1")}
           </div>
+        </>
+      )}
+      {has("q2_web_order") && (
+        <>
+          {inp("description", "주문서 설명 (한 줄)", "웹 주문서 품목 아래에 보여요. 예) 김장용 추젓")}
+          <Toggle checked={v.shop_visible !== false} onChange={(x) => set({ shop_visible: x })} label="웹 주문서에 보이기" />
         </>
       )}
       {!isNew && <Toggle checked={v.active !== false} onChange={(x) => set({ active: x })} label="판매 중 (끄면 주문 화면에서 숨김)" />}

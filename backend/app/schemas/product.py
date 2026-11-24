@@ -15,13 +15,16 @@ class ProductBase(BaseModel):
     unit_kg: float = Field(default=0, ge=0, le=2000)
     units_per_box: int | None = Field(default=None, ge=1, le=1000)
     unit_price: int | None = Field(default=None, ge=0)
+    # 웹 주문서: 고객에게 보이는 설명·노출 여부
+    description: str = Field(default="", max_length=200)
+    shop_visible: bool = True
     # 4분기: 세금·자재 매핑
     tax_type: TaxType = ""
     container_item: str = ""
     box_item: str = ""
     label_item: str = ""
 
-    @field_validator("name", "spec", "aliases", "unit", "container_item", "box_item", "label_item", mode="before")
+    @field_validator("name", "spec", "aliases", "unit", "description", "container_item", "box_item", "label_item", mode="before")
     @classmethod
     def _strip(cls, v):
         return (v or "").strip()
@@ -40,6 +43,8 @@ class ProductPatch(BaseModel):
     units_per_box: int | None = Field(default=None, ge=1, le=1000)
     unit_price: int | None = Field(default=None, ge=0)
     active: bool | None = None
+    description: str | None = Field(default=None, max_length=200)
+    shop_visible: bool | None = None
     tax_type: TaxType | None = None
     container_item: str | None = None
     box_item: str | None = None
@@ -72,6 +77,8 @@ class ProductOut(ProductBase):
             units_per_box=d.get("units_per_box") if (d.get("units_per_box") or 0) >= 1 else None,
             unit_price=d.get("unit_price") if (d.get("unit_price") or 0) >= 0 else None,
             active=d.get("active") is not False,
+            description=d.get("description") or "",
+            shop_visible=d.get("shop_visible") is not False,  # 빈칸이면 보이게
             tax_type=tax if tax in ("과세", "면세") else "",  # type: ignore[arg-type]
             container_item=d.get("container_item") or "",
             box_item=d.get("box_item") or "",

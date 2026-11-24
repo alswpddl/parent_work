@@ -193,13 +193,15 @@ class SelfOrderService:
     # ---------------------------------------------------------------- 이벤트
     def on_order_created(self, payload: dict) -> None:
         o: OrderOut = payload["order"]
-        if o.source != "셀프주문":
+        if o.source not in ("셀프주문", "웹주문서"):
             return
         if not self.ctx.settings.load().notify_new_self_order:
             return
         items = ", ".join(f"{l.product_name} {l.qty}" for l in o.lines)
         text = (
-            f"🛒 새 셀프주문\n{o.customer_name}\n{items}\n"
+            f"🛒 새 {'웹 주문' if o.source == '웹주문서' else '셀프주문'}\n{o.customer_name}"
+            + (f" ({o.recipient})" if o.recipient and o.recipient != o.customer_name else "")
+            + f"\n{items}\n"
             f"납기 {fmt_date_ko(o.due_date)} · {o.ship_method} · {o.order_kg:g}kg"
             + (f"\n메모: {o.note}" if o.note else "")
         )
