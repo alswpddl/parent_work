@@ -202,3 +202,10 @@ def test_public_web_order_flow(client):
     # 관리자 쪽에서는 웹주문서 경로로 보인다
     orders = client.get("/api/orders").json()["orders"]
     assert any(o["order_id"] == oid and o["source"] == "웹주문서" for o in orders)
+
+
+def test_status_shows_google_info_without_secrets(client):
+    st = client.get("/api/system/status").json()
+    assert st["google"]["connected"] is False and "private_key" not in str(st)
+    r = client.post("/api/system/google/check").json()
+    assert r["ok"] is False and "메모리" in r["message"]

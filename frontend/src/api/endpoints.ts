@@ -42,6 +42,7 @@ import type {
 // ---------------------------------------------------------------- 시스템
 export const getFeatures = () => api<Features>("/api/system/features", { auth: false });
 export const getSystemStatus = () => api<SystemStatus>("/api/system/status");
+export const googleCheck = () => api<{ ok: boolean; message: string }>("/api/system/google/check", { method: "POST" });
 export const loginPin = (pin: string) => api<{ token: string; expires_at: string }>("/api/auth/pin", { body: { pin }, auth: false });
 
 // ---------------------------------------------------------------- 기준정보
