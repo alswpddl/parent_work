@@ -4,13 +4,20 @@
   "features": {
     "ghcr.io/devcontainers/features/node:1": { "version": "20" }
   },
-  "postCreateCommand": "pip install -r backend/requirements-dev.txt && cp -n backend/.env.example backend/.env || true",
-  "forwardPorts": [8000, 5173],
+  // 처음 만들 때 한 번: 파이썬·화면 패키지 설치 + 예시 설정 파일(.env) 만들기
+  "postCreateCommand": "pip install -r backend/requirements-dev.txt && (cp -n backend/.env.example backend/.env || true) && cd frontend && npm install",
+  // 열 때마다: 서버 두 개를 자동으로 켠다 (터미널에 아무것도 칠 필요 없음)
+  "postAttachCommand": {
+    "api": "cd backend && uvicorn app.main:app --reload --port 8000",
+    "web": "cd frontend && npm run dev"
+  },
+  "forwardPorts": [5173, 8000],
   "portsAttributes": {
-    "8000": { "label": "API (FastAPI)" },
-    "5173": { "label": "화면 (Vite)" }
+    "5173": { "label": "화면 (여기를 열면 돼요)", "onAutoForward": "openBrowser" },
+    "8000": { "label": "API (FastAPI)", "onAutoForward": "silent" }
   },
   "customizations": {
+    "codespaces": { "openFiles": ["README.md"] },
     "vscode": {
       "extensions": ["ms-python.python", "charliermarsh.ruff", "bradlc.vscode-tailwindcss"]
     }
