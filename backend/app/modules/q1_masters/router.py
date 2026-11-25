@@ -72,6 +72,18 @@ def list_products(include_inactive: bool = False, ctx: AppContext = Depends(get_
     return ctx.products.list(include_inactive=include_inactive)
 
 
+
+@router.post("/customers/{customer_id}/reset-web-password", response_model=CustomerOut)
+def reset_web_password(customer_id: str, ctx: AppContext = Depends(get_ctx)) -> CustomerOut:
+    """손님이 웹 주문서 비밀번호를 잊었을 때: 지우면 손님이 같은 번호로 다시 가입할 수 있다."""
+    if not ctx.customers.get(customer_id, fresh=True):
+        raise NotFoundError("거래처를 찾을 수 없어요.")
+    ctx.customers.update((customer_id,), {"web_password": ""})
+    ctx.logs.write("웹 비밀번호 초기화", customer_id, "")
+    out = ctx.customers.by_id(customer_id)
+    assert out is not None
+    return out
+
 @router.post("/products", response_model=ProductOut, status_code=201)
 def create_product(body: ProductCreate, ctx: AppContext = Depends(get_ctx)) -> ProductOut:
     existing = ctx.products.list(include_inactive=True, fresh=True)

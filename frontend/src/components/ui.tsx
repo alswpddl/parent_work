@@ -38,6 +38,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export function Button({ variant = "primary", size = "lg", loading, block, icon, className, children, disabled, ...rest }: ButtonProps) {
   return (
     <button
+      type="button" // 폼 안에서도 누른다고 제출되지 않게 (제출 버튼은 type="submit" 을 직접 준다)
       {...rest}
       disabled={disabled || loading}
       className={cx(

@@ -42,6 +42,7 @@ export interface RequestOptions {
   form?: FormData;
   query?: Query;
   auth?: boolean;
+  headers?: Record<string, string>;
 }
 
 function buildUrl(path: string, query?: Query): string {
@@ -66,7 +67,7 @@ function slowStart(): () => void {
 }
 
 async function raw(path: string, opts: RequestOptions = {}): Promise<Response> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...(opts.headers ?? {}) };
   if (opts.auth !== false && token) headers.Authorization = `Bearer ${token}`;
   let body: BodyInit | undefined;
   if (opts.form) body = opts.form;

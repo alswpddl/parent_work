@@ -117,6 +117,7 @@ CUSTOMERS = TabSpec(
         C("default_method", "기본출고방식"),
         C("order_token", "주문링크토큰", quarter=2),
         C("privacy_agreed_at", "개인정보동의", "datetime", quarter=2),
+        C("web_password", "웹로그인(암호화)", quarter=2),  # 손님이 정한 비밀번호의 해시. 지우면 비밀번호 초기화
         C("notify_opt_in", "알림톡수신", "bool", quarter=3),
         C("biz_no", "사업자번호", text=True, quarter=4),
         C("owner_name", "대표자", quarter=4),
@@ -149,6 +150,7 @@ PRODUCTS = TabSpec(
         C("description", "설명", quarter=2),
         C("shop_visible", "주문서노출", "bool", quarter=2),
         C("sold_out", "품절", "bool", quarter=2),
+        C("image_url", "사진주소", quarter=2),
         C("tax_type", "과세구분", quarter=4),
         C("container_item", "용기자재", quarter=4),
         C("box_item", "박스자재", quarter=4),

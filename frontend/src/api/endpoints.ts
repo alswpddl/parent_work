@@ -32,7 +32,10 @@ import type {
   PublicOrder,
   ReorderStat,
   SendResult,
+  ShopAuth,
   ShopInfo,
+  ShopProfile,
+  MyOrder,
   Settlement,
   StockMove,
   SystemStatus,
@@ -87,6 +90,17 @@ export const publicPlaceOrder = (token: string, body: { items: { sku: string; qt
   api<PublicOrder>(`/api/public/orders/${token}`, { body, auth: false });
 export const shopInfo = () => api<ShopInfo>("/api/public/shop", { auth: false });
 export const shopPlaceOrder = (body: GuestOrderInput) => api<GuestOrderResult>("/api/public/shop/orders", { body, auth: false });
+const shopAuth = (token: string): { auth: false; headers: Record<string, string> } => ({ auth: false, headers: token ? { "X-Shop-Token": token } : {} });
+export const shopPlaceOrderAs = (body: GuestOrderInput, token: string) => api<GuestOrderResult>("/api/public/shop/orders", { body, ...shopAuth(token) });
+export const shopSignup = (body: { name: string; company: string; phone: string; password: string; address: string; zipcode: string; agree_privacy: boolean }) =>
+  api<ShopAuth>("/api/public/shop/auth/signup", { body, auth: false });
+export const shopLogin = (phone: string, password: string) => api<ShopAuth>("/api/public/shop/auth/login", { body: { phone, password }, auth: false });
+export const shopMe = (token: string) => api<ShopProfile>("/api/public/shop/me", shopAuth(token));
+export const shopUpdateMe = (token: string, patch: Partial<ShopProfile>) => api<ShopProfile>("/api/public/shop/me", { method: "PATCH", body: patch, ...shopAuth(token) });
+export const shopChangePassword = (token: string, old_password: string, new_password: string) =>
+  api<ShopAuth>("/api/public/shop/me/password", { body: { old_password, new_password }, ...shopAuth(token) });
+export const shopMyOrders = (token: string) => api<MyOrder[]>("/api/public/shop/me/orders", shopAuth(token));
+export const resetWebPassword = (customerId: string) => api<Customer>(`/api/customers/${encodeURIComponent(customerId)}/reset-web-password`, { method: "POST" });
 export const shopLookup = (orderId: string, phone4: string) =>
   api<PublicOrder>("/api/public/shop/orders/lookup", { query: { order_id: orderId, phone4 }, auth: false });
 export const publicRecent = (token: string) => api<PublicOrder[]>(`/api/public/orders/${token}`, { auth: false });

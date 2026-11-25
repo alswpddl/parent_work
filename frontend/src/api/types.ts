@@ -58,6 +58,7 @@ export interface AppSettings {
   shop_enabled: boolean;
   shop_show_prices: boolean;
   shop_notice: string;
+  shop_intro: string;
   privacy_retention: string;
   shop_shipping_fee: number;
   shop_free_shipping_over: number;
@@ -84,6 +85,7 @@ export interface Customer {
   last_order_date: string | null;
   avg_interval_days: number | null;
   reorder_snooze_until: string | null;
+  has_web_account?: boolean;
 }
 export type CustomerInput = Omit<Customer, "customer_id" | "active" | "has_order_link" | "last_order_date" | "avg_interval_days" | "reorder_snooze_until">;
 
@@ -100,6 +102,7 @@ export interface Product {
   description: string;
   shop_visible: boolean;
   sold_out: boolean;
+  image_url: string;
   tax_type: "과세" | "면세" | "";
   container_item: string;
   box_item: string;
@@ -469,12 +472,14 @@ export interface ShopProduct {
   price: number | null;
   description: string;
   sold_out: boolean;
+  image_url: string;
 }
 
 export interface ShopInfo {
   factory_name: string;
   factory_phone: string;
   notice: string;
+  intro: string;
   show_prices: boolean;
   bank_account: string;
   min_due_date: string;
@@ -499,6 +504,7 @@ export interface GuestOrderInput {
   agree_privacy: boolean;
   website: string;
   client_token: string;
+  password?: string;
 }
 
 export interface GuestOrderResult {
@@ -513,4 +519,36 @@ export interface GuestOrderResult {
   shipping_note: string;
   bank_account: string;
   factory_phone: string;
+  token: string;
+}
+
+export interface ShopProfile {
+  name: string;
+  company: string;
+  phone: string;
+  address: string;
+  zipcode: string;
+}
+
+export interface ShopAuth {
+  token: string;
+  profile: ShopProfile;
+}
+
+export interface MyOrder {
+  order_id: string;
+  created_at: string;
+  status: string;
+  due_date: string;
+  ship_method: string;
+  lines: { sku: string; name: string; qty: number; amount: number | null }[];
+  subtotal: number | null;
+  shipping_fee: number;
+  total: number | null;
+  paid: boolean;
+  recipient: string;
+  address: string;
+  carrier: string;
+  tracking_no: string;
+  truck_no: string;
 }

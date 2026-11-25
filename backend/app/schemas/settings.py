@@ -25,6 +25,7 @@ SETTING_DEFS: list[tuple[str, str, str, str]] = [
     ("shop_show_prices", "웹 주문서에 가격 보이기", "예", "예 / 아니오"),
     ("shop_notice", "웹 주문서 안내 문구", "", "주문서 맨 위에 보이는 문구 (예: 오후 2시 전 주문은 당일 출고)"),
     ("privacy_retention", "개인정보 보관 기간", "주문일로부터 1년", "웹 주문서 개인정보 동의 문구에 표시"),
+    ("shop_intro", "웹 주문서 공장 소개", "", "주문서 첫 화면에 보이는 소개 (예: 통영에서 30년, 국산 새우로 직접 담급니다)"),
     ("shop_shipping_fee", "웹 주문 택배비(원)", "0", "0 이면 '택배비는 확인 후 안내'로 표시"),
     ("shop_free_shipping_over", "택배비 무료 기준 금액(원)", "0", "이 금액 이상 주문하면 택배비 무료. 0 이면 무료 없음"),
     ("closed_days", "받는 날로 못 고르는 요일", "일", "쉼표로 (예: 일 또는 토,일). 택배가 쉬는 날. 없으면 '없음'"),
@@ -63,6 +64,7 @@ class AppSettings(BaseModel):
     shop_show_prices: bool = True
     shop_notice: str = ""
     privacy_retention: str = "주문일로부터 1년"
+    shop_intro: str = ""
     shop_shipping_fee: int = Field(default=0, ge=0, le=100_000)
     shop_free_shipping_over: int = Field(default=0, ge=0)
     closed_days: str = "일"
@@ -106,6 +108,7 @@ class SettingsPatch(BaseModel):
     shop_show_prices: bool | None = None
     shop_notice: str | None = None
     privacy_retention: str | None = Field(default=None, max_length=60)
+    shop_intro: str | None = Field(default=None, max_length=500)
     shop_shipping_fee: int | None = Field(default=None, ge=0, le=100_000)
     shop_free_shipping_over: int | None = Field(default=None, ge=0)
     closed_days: str | None = Field(default=None, max_length=20)
