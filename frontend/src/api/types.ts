@@ -27,6 +27,7 @@ export interface SystemStatus {
   integration_warnings: string[];
   modules: string[];
   sheets_backend: string;
+  google: { connected: boolean; service_account_email: string; spreadsheet_url: string; system_spreadsheet_url: string };
 }
 
 // ---------------------------------------------------------------- 기준정보

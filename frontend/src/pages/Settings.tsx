@@ -9,6 +9,7 @@ import {
   createProduct,
   getSettings,
   getSystemStatus,
+  googleCheck,
   issueOrderLink,
   kakaoDisconnect,
   kakaoLoginUrl,
@@ -24,7 +25,7 @@ import {
   updateCustomer,
   updateProduct,
 } from "../api/endpoints";
-import type { AppSettings, Customer, Product } from "../api/types";
+import type { AppSettings, Customer, Product, SystemStatus } from "../api/types";
 import { useToast } from "../components/Toast";
 import { Alert, Badge, Button, Card, ConfirmButton, CopyButton, Empty, Field, Input, LoadState, Modal, PageHeader, Segmented, Select, Toggle } from "../components/ui";
 import { useFeatures } from "../lib/features";
@@ -60,7 +61,7 @@ export default function Settings() {
             { value: "customers", label: "거래처" },
             { value: "products", label: "품목" },
             { value: "kakao", label: "카톡·알림" },
-            { value: "system", label: "상태" },
+            { value: "system", label: "연결 상태" },
           ]}
         />
       </div>
@@ -547,6 +548,46 @@ function TemplatesModal({ onClose }: { onClose: () => void }) {
 }
 
 // ================================================================ 상태
+const GUIDE_URL = "https://github.com/alswpddl/parent_work/blob/main/docs/구글시트_연동_가이드.md";
+
+function GoogleCard({ g }: { g: SystemStatus["google"] }) {
+  const toast = useToast();
+  const { busy, run } = useAction();
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+  return (
+    <Card title="📗 구글 시트 (데이터 저장소)">
+      {g.connected ? (
+        <Alert tone="ok">구글 시트에 저장하고 있어요. 서버가 꺼졌다 켜져도 주문이 그대로 남아요.</Alert>
+      ) : (
+        <Alert tone="warn" action={<a href={GUIDE_URL} target="_blank" rel="noreferrer"><Button size="sm">연결 방법</Button></a>}>
+          지금은 연습용 메모리 모드라 서버가 잠들면 주문이 사라져요. 실제로 쓰기 전에 구글 시트를 연결해 주세요.
+        </Alert>
+      )}
+      {g.service_account_email && (
+        <div className="mb-3 rounded-xl bg-white p-3">
+          <div className="text-sm text-stone-500">서버 전용 구글 계정 (서비스 계정) — 시트를 이 주소와 '편집자'로 공유해야 해요</div>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span className="break-all font-semibold">{g.service_account_email}</span>
+            <CopyButton size="sm" text={g.service_account_email} onCopied={(ok) => toast(ok ? "복사했어요." : "복사가 막혔어요.", ok ? "ok" : "error")} />
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {g.spreadsheet_url && (
+          <a href={g.spreadsheet_url} target="_blank" rel="noreferrer"><Button size="sm" variant="soft">주문장 시트 열기</Button></a>
+        )}
+        {g.system_spreadsheet_url && (
+          <a href={g.system_spreadsheet_url} target="_blank" rel="noreferrer"><Button size="sm" variant="ghost">시스템 시트 열기</Button></a>
+        )}
+        <Button size="sm" variant="ghost" icon={<RefreshCw className="h-4 w-4" />} loading={busy === "check"} onClick={() => run("check", async () => setResult(await googleCheck()), (m) => toast(m, "error"))}>
+          연결 확인
+        </Button>
+      </div>
+      {result && <div className="mt-3"><Alert tone={result.ok ? "ok" : "error"}>{result.message}</Alert></div>}
+    </Card>
+  );
+}
+
 function SystemTab() {
   const s = useAsync(getSystemStatus, []);
   return (
@@ -554,6 +595,7 @@ function SystemTab() {
       <LoadState loading={s.loading} error={s.error} onRetry={s.reload} />
       {s.data && (
         <>
+          <GoogleCard g={s.data.google} />
           <Card title="연결 상태">
             <p className="mb-2">데이터 저장소: <b>{s.data.sheets_backend === "gspread" ? "구글 시트" : "메모리 (연습용 · 서버 끄면 사라짐)"}</b></p>
             {s.data.config_problems.map((p) => (

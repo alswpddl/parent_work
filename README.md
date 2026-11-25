@@ -42,21 +42,10 @@ cd frontend && npm run build
 
 ## 2. Google Sheets 연결
 
-1. [Google Cloud Console](https://console.cloud.google.com/) → 프로젝트 → **Google Sheets API 사용 설정**
-2. **서비스 계정** 만들기 → **키 → JSON** 내려받기 (git 에 올리지 마세요)
-3. 빈 스프레드시트 2개 만들기
-   - `공장 주문장` — 부모님과 공유하는 시트 → `GOOGLE_SPREADSHEET_ID`
-   - `공장 시스템` — 카카오 토큰·발송기록 (부모님과 공유 X) → `SYSTEM_SPREADSHEET_ID`
-4. 두 시트 모두 서비스 계정 이메일을 **편집자**로 공유
-5. 탭 자동 생성:
-   ```bash
-   cd backend
-   export GOOGLE_SPREADSHEET_ID=... SYSTEM_SPREADSHEET_ID=...
-   export GOOGLE_SERVICE_ACCOUNT_JSON="$(cat ~/Downloads/키파일.json)"
-   python -m scripts.init_sheets --demo     # --demo: 예시 품목·거래처 (빈 시트일 때만)
-   ```
-   만들어지는 탭: `주문장 · 거래처 · 품목 · 자재재고 · 월말정산 · _설정 · _기록 · _상품매핑 · _재고이력`
-   (시스템 시트: `토큰 · 발송기록`)
+브라우저만으로 돼요 → **[docs/구글시트_연동_가이드.md](docs/구글시트_연동_가이드.md)**
+
+요약: 빈 시트 2개 → 서비스 계정 만들고 JSON 키 받기 → 시트를 서비스 계정과 편집자로 공유 →
+Render 에 `SHEETS_BACKEND=gspread` · 시트 ID 2개 · 키 JSON 넣기 → 서버가 켜질 때 탭·제목 줄·기본 설정을 자동으로 만들어요.
 
 > 부모님이 **열 순서를 바꾸거나 메모 열·수식을 추가해도** 괜찮습니다. 서버는 헤더 이름으로 열을 찾고 바뀐 칸만 씁니다.
 > 단, **1행 헤더 이름은 바꾸지 마세요.** `_설정` 탭의 '값' 칸은 시트에서 직접 고쳐도 됩니다.

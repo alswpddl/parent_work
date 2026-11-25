@@ -96,7 +96,36 @@ def status(ctx: AppContext = Depends(get_ctx)) -> dict:
         "integration_warnings": ctx.config.integration_warnings(),
         "modules": ctx.enabled_modules,
         "sheets_backend": ctx.sheets.backend.name,
+        "google": google_info(ctx),
     }
+
+
+def _sheet_url(sid: str) -> str:
+    return f"https://docs.google.com/spreadsheets/d/{sid}/edit" if sid else ""
+
+
+def google_info(ctx: AppContext) -> dict:
+    """구글 시트 연결 정보 (화면 [상태] 탭에 표시). 비밀 키 내용은 절대 내보내지 않는다."""
+    sa = ctx.config.service_account_info or {}
+    return {
+        "connected": ctx.sheets.backend.name == "gspread",
+        "service_account_email": sa.get("client_email", ""),
+        "spreadsheet_url": _sheet_url(ctx.config.spreadsheet_id),
+        "system_spreadsheet_url": _sheet_url(ctx.config.system_spreadsheet_id),
+    }
+
+
+@router.post("/system/google/check", dependencies=[Depends(require_admin)])
+def google_check(ctx: AppContext = Depends(get_ctx)) -> dict:
+    """시트를 실제로 한 번 읽어 본다. 실패 이유를 한국어로 돌려준다."""
+    if ctx.sheets.backend.name != "gspread":
+        return {"ok": False, "message": "지금은 연습용 메모리 모드예요. Render 에 SHEETS_BACKEND=gspread 와 시트 정보를 넣어 주세요."}
+    try:
+        tabs = ctx.sheets.backend.list_tabs()
+        ctx.settings.rows(fresh=True)
+    except Exception as e:  # noqa: BLE001 — 어떤 오류든 화면에 이유를 보여 준다
+        return {"ok": False, "message": f"시트를 읽지 못했어요: {getattr(e, 'message', None) or e}"}
+    return {"ok": True, "message": f"구글 시트와 잘 연결돼 있어요. 탭 {len(tabs)}개: {', '.join(tabs)}"}
 
 
 @router.post("/jobs/{job_name}", dependencies=[Depends(require_job_secret)])
