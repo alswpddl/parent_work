@@ -58,6 +58,9 @@ export interface AppSettings {
   shop_show_prices: boolean;
   shop_notice: string;
   privacy_retention: string;
+  shop_shipping_fee: number;
+  shop_free_shipping_over: number;
+  closed_days: string;
 }
 
 export interface Customer {
@@ -92,8 +95,10 @@ export interface Product {
   unit_kg: number;
   units_per_box: number | null;
   unit_price: number | null;
+  retail_price: number | null;
   description: string;
   shop_visible: boolean;
+  sold_out: boolean;
   tax_type: "과세" | "면세" | "";
   container_item: string;
   box_item: string;
@@ -163,7 +168,9 @@ export interface Order {
   pallets: number;
   boxes: number;
   total_amount: number | null;
+  shipping_fee: number;
   shipped_at: string | null;
+  paid_at: string | null;
   carrier: string;
   tracking_no: string;
   truck_no: string;
@@ -245,6 +252,7 @@ export interface PublicOrder {
   carrier: string;
   tracking_no: string;
   truck_no: string;
+  paid: boolean;
 }
 
 export interface Briefing {
@@ -445,6 +453,7 @@ export interface ShopProduct {
   unit_kg: number;
   price: number | null;
   description: string;
+  sold_out: boolean;
 }
 
 export interface ShopInfo {
@@ -454,6 +463,11 @@ export interface ShopInfo {
   show_prices: boolean;
   bank_account: string;
   min_due_date: string;
+  closed_weekdays: number[];
+  closed_days_text: string;
+  shipping_fee: number;
+  free_shipping_over: number;
+  threshold_kg: number;
   privacy_text: string;
   products: ShopProduct[];
 }
@@ -469,6 +483,7 @@ export interface GuestOrderInput {
   items: { sku: string; qty: number }[];
   agree_privacy: boolean;
   website: string;
+  client_token: string;
 }
 
 export interface GuestOrderResult {
@@ -477,7 +492,10 @@ export interface GuestOrderResult {
   items: string;
   due_date: string;
   ship_method: string;
+  subtotal: number | null;
+  shipping_fee: number | null;
   estimated_total: number | null;
+  shipping_note: string;
   bank_account: string;
   factory_phone: string;
 }

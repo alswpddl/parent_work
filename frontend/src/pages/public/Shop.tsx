@@ -52,6 +52,34 @@ const store = {
 };
 
 const MOBILE_RE = /^01[016789]\d{7,8}$/;
+const WEEK = "월화수목금토일";
+
+/** 같은 주문서를 두 번 보내도 주문이 1건만 생기게 하는 표 (서버가 기억함) */
+function newToken(): string {
+  try {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  } catch {
+    /* 오래된 브라우저 */
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/** 'YYYY-MM-DD' → 0=월 … 6=일 */
+function weekdayOf(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return (new Date(y, m - 1, d).getDay() + 6) % 7;
+}
+
+/** 서버와 같은 규칙으로 택배비 미리 계산 (null = 확인 후 안내) */
+function estimateShipping(shop: ShopInfo, subtotal: number | null, kg: number): { fee: number | null; note: string } {
+  if (shop.threshold_kg > 0 && kg >= shop.threshold_kg) return { fee: null, note: "양이 많아 화물로 보내요 (운임은 확인 후 안내)" };
+  if (shop.free_shipping_over > 0 && subtotal !== null && subtotal >= shop.free_shipping_over) return { fee: 0, note: "택배비 무료" };
+  if (shop.shipping_fee > 0) {
+    const left = shop.free_shipping_over > 0 && subtotal !== null ? shop.free_shipping_over - subtotal : 0;
+    return { fee: shop.shipping_fee, note: left > 0 ? `${won(left)} 더 담으면 택배비 무료` : `택배비 ${won(shop.shipping_fee)}` };
+  }
+  return { fee: null, note: "택배비는 확인 후 안내드려요" };
+}
 const digits = (s: string) => s.replace(/\D/g, "");
 function formatPhone(s: string): string {
   const d = digits(s).slice(0, 11);
@@ -163,7 +191,7 @@ function OrderForm({ shop, onDone }: { shop: ShopInfo; onDone: (r: GuestOrderRes
   const [agree, setAgree] = useState(false);
   const [showPolicy, setShowPolicy] = useState(false);
   const [website, setWebsite] = useState(""); // 숨김 칸 (봇용)
-  const [errors, setErrors] = useState<Partial<Record<"items" | "name" | "phone" | "address" | "agree", string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<"items" | "name" | "phone" | "address" | "due" | "agree", string>>>({});
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -177,7 +205,12 @@ function OrderForm({ shop, onDone }: { shop: ShopInfo; onDone: (r: GuestOrderRes
     [qty, pmap],
   );
   const count = picked.reduce((a, x) => a + x.qty, 0);
-  const total = shop.show_prices && picked.every((x) => x.p.price !== null) ? picked.reduce((a, x) => a + x.qty * (x.p.price ?? 0), 0) : null;
+  const subtotal = shop.show_prices && picked.every((x) => x.p.price !== null) ? picked.reduce((a, x) => a + x.qty * (x.p.price ?? 0), 0) : null;
+  const totalKg = picked.reduce((a, x) => a + x.qty * x.p.unit_kg, 0);
+  const ship = estimateShipping(shop, subtotal, totalKg);
+  const total = subtotal !== null && ship.fee !== null ? subtotal + ship.fee : null;
+  const tokenRef = useRef(newToken());
+  const dueClosed = !!due && shop.closed_weekdays.includes(weekdayOf(due));
   const address = `${me.base} ${me.detail}`.trim();
 
   const check = (): boolean => {
@@ -186,9 +219,11 @@ function OrderForm({ shop, onDone }: { shop: ShopInfo; onDone: (r: GuestOrderRes
     if (!me.name.trim()) e.name = "받는 분 성함을 적어 주세요.";
     if (!MOBILE_RE.test(digits(me.phone))) e.phone = "휴대폰 번호를 확인해 주세요. 예) 010-1234-5678";
     if (address.length < 5) e.address = "받는 주소를 적어 주세요.";
+    if (due && due < shop.min_due_date) e.due = `${dateKo(shop.min_due_date)}부터 고를 수 있어요.`;
+    else if (dueClosed) e.due = `${WEEK[weekdayOf(due)]}요일은 택배가 쉬어요. 다른 날을 골라 주세요.`;
     if (!agree) e.agree = "개인정보 수집·이용에 동의해 주세요.";
     setErrors(e);
-    const first = (["items", "name", "phone", "address", "agree"] as const).find((k) => e[k]);
+    const first = (["items", "name", "phone", "address", "due", "agree"] as const).find((k) => e[k]);
     if (first) document.getElementById(`f-${first}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     return !first;
   };
@@ -217,6 +252,7 @@ function OrderForm({ shop, onDone }: { shop: ShopInfo; onDone: (r: GuestOrderRes
         items: picked.map((x) => ({ sku: x.p.sku, qty: x.qty })),
         agree_privacy: agree,
         website,
+        client_token: tokenRef.current,
       });
       if (remember) store.set(ME_KEY, me);
       else store.del(ME_KEY);
@@ -238,7 +274,7 @@ function OrderForm({ shop, onDone }: { shop: ShopInfo; onDone: (r: GuestOrderRes
           {shop.products.map((p) => {
             const q = qty[p.sku] ?? 0;
             return (
-              <div key={p.sku} className={cx("rounded-2xl border-2 bg-white p-4 transition", q ? "border-brand shadow-sm" : "border-line")}>
+              <div key={p.sku} className={cx("rounded-2xl border-2 bg-white p-4 transition", p.sold_out ? "border-line opacity-60" : q ? "border-brand shadow-sm" : "border-line")}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-lg font-extrabold leading-tight">
@@ -251,12 +287,14 @@ function OrderForm({ shop, onDone }: { shop: ShopInfo; onDone: (r: GuestOrderRes
                       </div>
                     )}
                   </div>
-                  {q > 0 && <Badge tone="green">{q}{p.unit}</Badge>}
+                  {p.sold_out ? <Badge tone="red">품절</Badge> : q > 0 && <Badge tone="green">{q}{p.unit}</Badge>}
                 </div>
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <span className="text-sm text-stone-500">{q > 0 && p.price !== null ? `${won(q * p.price)}` : `단위: ${p.unit}`}</span>
-                  <Stepper value={q} onChange={(v) => { setQty({ ...qty, [p.sku]: v }); setErrors((e) => ({ ...e, items: undefined })); }} max={999} />
-                </div>
+                {!p.sold_out && (
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <span className="text-sm text-stone-500">{q > 0 && p.price !== null ? `${won(q * p.price)}` : `단위: ${p.unit}`}</span>
+                    <Stepper value={q} onChange={(v) => { setQty({ ...qty, [p.sku]: v }); setErrors((e) => ({ ...e, items: undefined })); }} max={999} />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -296,9 +334,20 @@ function OrderForm({ shop, onDone }: { shop: ShopInfo; onDone: (r: GuestOrderRes
             </Field>
           </div>
         </div>
-        <Field label="받고 싶은 날" hint={`${dateKo(shop.min_due_date)}부터 고를 수 있어요. 비워 두면 가장 빠른 날로 보내 드려요.`}>
-          <Input type="date" min={shop.min_due_date} value={due} onChange={(e) => setDue(e.target.value)} />
-        </Field>
+        <div id="f-due">
+          <Field
+            label="받고 싶은 날"
+            hint={
+              errors.due || dueClosed ? (
+                <span className="text-red-700">{errors.due || `${WEEK[weekdayOf(due)]}요일은 택배가 쉬어요. 다른 날을 골라 주세요.`}</span>
+              ) : (
+                `${dateKo(shop.min_due_date)}부터 고를 수 있어요${shop.closed_days_text ? ` (${shop.closed_days_text}요일 제외)` : ""}. 비워 두면 가장 빠른 날로 보내 드려요.`
+              )
+            }
+          >
+            <Input type="date" min={shop.min_due_date} value={due} onChange={(e) => { setDue(e.target.value); setErrors((x) => ({ ...x, due: undefined })); }} />
+          </Field>
+        </div>
         <Field label="요청사항">
           <Textarea rows={2} className="min-h-[84px]" value={note} maxLength={300} placeholder="예) 문 앞에 두세요 / 오전에 받고 싶어요" onChange={(e) => setNote(e.target.value)} />
         </Field>
@@ -340,9 +389,12 @@ function OrderForm({ shop, onDone }: { shop: ShopInfo; onDone: (r: GuestOrderRes
       <div className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 px-4 pt-3 backdrop-blur">
         <div className="mx-auto max-w-lg">
           {count > 0 && (
-            <div className="mb-2 flex items-baseline justify-between text-sm">
-              <span className="font-semibold">{picked.length}가지 · {count}개</span>
-              {total !== null && <span className="text-lg font-extrabold">{won(total)}</span>}
+            <div className="mb-2 flex items-baseline justify-between gap-2 text-sm">
+              <span className="font-semibold">
+                {picked.length}가지 · {count}개
+                {shop.show_prices && <span className="block text-xs font-normal text-stone-500">{ship.note}</span>}
+              </span>
+              {subtotal !== null && <span className="whitespace-nowrap text-lg font-extrabold">{won(total ?? subtotal)}</span>}
             </div>
           )}
           <Button size="xl" block icon={<ShoppingBasket className="h-6 w-6" />} onClick={() => check() && setConfirm(true)}>
@@ -385,10 +437,14 @@ function OrderForm({ shop, onDone }: { shop: ShopInfo; onDone: (r: GuestOrderRes
               </span>
             </div>
           ))}
-          {total !== null && (
-            <div className="flex justify-between px-4 py-3 text-lg font-extrabold">
-              <span>예상 금액</span>
-              <span>{won(total)}</span>
+          {subtotal !== null && (
+            <div className="space-y-1 px-4 py-3">
+              <div className="flex justify-between"><span>상품 금액</span><span>{won(subtotal)}</span></div>
+              <div className="flex justify-between"><span>택배비</span><span>{ship.fee === null ? "확인 후 안내" : ship.fee === 0 ? "무료" : won(ship.fee)}</span></div>
+              <div className="flex justify-between pt-1 text-lg font-extrabold">
+                <span>{total !== null ? "합계" : "상품 합계"}</span>
+                <span>{won(total ?? subtotal)}</span>
+              </div>
             </div>
           )}
         </div>
@@ -399,14 +455,14 @@ function OrderForm({ shop, onDone }: { shop: ShopInfo; onDone: (r: GuestOrderRes
           <Row k="받는 날" v={due ? dateKo(due) : "가장 빠른 날"} />
           {note.trim() && <Row k="요청사항" v={note.trim()} />}
         </dl>
-        {total !== null && <p className="mt-3 text-sm text-stone-500">택배비·정확한 금액은 주문 확인 후 안내드려요.</p>}
+        {subtotal !== null && <p className="mt-3 text-sm text-stone-500">{total !== null ? "입금 확인 후 보내 드려요." : `${ship.note}. 최종 금액은 문자로 알려 드려요.`}</p>}
         {sendError && <div className="mt-3"><Alert tone="error">{sendError}</Alert></div>}
       </Modal>
     </>
   );
 }
 
-function Row({ k, v }: { k: string; v: string }) {
+function Row({ k, v }: { k: string; v: ReactNode }) {
   return (
     <div className="flex gap-3">
       <dt className="w-[5.5rem] shrink-0 whitespace-nowrap text-stone-500">{k}</dt>
@@ -448,9 +504,11 @@ function Done({ r, shop, onAgain, onLookup }: { r: GuestOrderResult; shop: ShopI
         </div>
         <dl className="space-y-1">
           <Row k="품목" v={r.items} />
-          <Row k="받는 날" v={r.due_date === "날짜 미정" ? "가장 빠른 날" : r.due_date} />
+          <Row k="받는 날" v={r.due_date} />
           <Row k="보내는 방법" v={r.ship_method} />
-          {r.estimated_total !== null && <Row k="예상 금액" v={won(r.estimated_total)} />}
+          {r.subtotal !== null && <Row k="상품 금액" v={won(r.subtotal)} />}
+          {r.subtotal !== null && <Row k="택배비" v={r.shipping_fee === null ? r.shipping_note : r.shipping_fee === 0 ? "무료" : won(r.shipping_fee)} />}
+          {r.estimated_total !== null && <Row k="입금할 금액" v={<span className="text-lg text-brand-dark">{won(r.estimated_total)}</span>} />}
         </dl>
       </div>
 
@@ -460,7 +518,7 @@ function Done({ r, shop, onAgain, onLookup }: { r: GuestOrderResult; shop: ShopI
           <div className="mb-3 break-keep text-lg font-bold">{r.bank_account}</div>
           <CopyButton size="sm" label="계좌 복사" text={r.bank_account} />
           <p className="mt-3 text-sm text-stone-600">
-            {r.estimated_total !== null ? "정확한 금액(택배비 포함)은 확인 후 문자로 안내드려요. " : "금액은 확인 후 문자로 안내드려요. "}
+            {r.estimated_total !== null ? `${won(r.estimated_total)}을 보내 주세요. 입금이 확인되면 바로 준비해요. ` : "금액은 확인 후 문자로 안내드려요. "}
             입금자명은 주문하신 분 성함으로 해 주세요.
           </p>
         </div>
@@ -543,6 +601,7 @@ function Lookup() {
             <Row k="품목" v={r.items} />
             <Row k="받는 날" v={r.due_date === "날짜 미정" ? "정해지면 알려 드려요" : r.due_date} />
             <Row k="보내는 방법" v={r.ship_method} />
+            <Row k="입금" v={r.paid ? "확인됐어요 ✔" : "확인 전이에요"} />
             {r.tracking_no && <Row k="송장" v={`${r.carrier} ${r.tracking_no}`} />}
             {r.truck_no && <Row k="화물차" v={r.truck_no} />}
           </dl>

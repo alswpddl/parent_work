@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 
 from ...api.deps import get_ctx, require_admin
 from ...context import AppContext
@@ -64,6 +65,16 @@ def get_order(order_id: str, ctx: AppContext = Depends(get_ctx)) -> OrderOut:
 @router.patch("/orders/{order_id}", response_model=OrderOut)
 def patch_order(order_id: str, body: OrderPatch, ctx: AppContext = Depends(get_ctx)) -> OrderOut:
     return ctx.orders.update(order_id, body)
+
+
+class PaidIn(BaseModel):
+    paid: bool = True
+
+
+@router.post("/orders/{order_id}/paid", response_model=OrderOut)
+def set_paid(order_id: str, body: PaidIn, ctx: AppContext = Depends(get_ctx)) -> OrderOut:
+    """입금 확인 표시 (paid=false 면 취소)"""
+    return ctx.orders.set_paid(order_id, body.paid)
 
 
 @router.post("/orders/{order_id}/cancel", response_model=OrderOut)

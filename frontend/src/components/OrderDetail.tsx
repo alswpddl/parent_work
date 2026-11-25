@@ -1,11 +1,12 @@
 // 주문 한 건 자세히 보기 + 수정·출고·취소·알림톡
 import { useState } from "react";
-import { Bell, PackageCheck, Pencil, RotateCcw, XCircle } from "lucide-react";
+import { Bell, Banknote, PackageCheck, Pencil, Phone, RotateCcw, XCircle } from "lucide-react";
 import { errorMessage } from "../api/client";
-import { cancelOrder, getSettings, listCustomers, listMessages, listProducts, notifyResend, shipOrder, unshipOrder, updateOrder } from "../api/endpoints";
+import { cancelOrder, getSettings, listCustomers, listMessages, listProducts, notifyResend, setOrderPaid, shipOrder, unshipOrder, updateOrder } from "../api/endpoints";
 import type { Order } from "../api/types";
 import { useFeatures } from "../lib/features";
-import { dateKo, dateTimeKo, kg, won } from "../lib/format";
+import { dateKo, dateTimeKo, kg, telHref, won } from "../lib/format";
+import { needsPayment, orderTotal } from "../lib/orders";
 import { useAction, useAsync } from "../lib/hooks";
 import OrderForm, { formToInput, orderToForm } from "./OrderForm";
 import { useToast } from "./Toast";
@@ -41,6 +42,11 @@ export default function OrderDetail({ order, onClose, onChanged }: { order: Orde
       footer={
         !editing && (
           <>
+            {needsPayment(order) && (
+              <Button variant="soft" icon={<Banknote className="h-5 w-5" />} loading={busy === "paid"} onClick={() => act("paid", () => setOrderPaid(order.order_id, true), "입금 확인했어요.")}>
+                입금 확인
+              </Button>
+            )}
             {!closed && (
               <Button icon={<PackageCheck className="h-5 w-5" />} loading={busy === "ship"} onClick={() => act("ship", () => shipOrder(order.order_id), "출고 완료로 바꿨어요.")}>
                 출고 완료
@@ -123,10 +129,44 @@ export default function OrderDetail({ order, onClose, onChanged }: { order: Orde
           <KV k="주문번호" v={order.order_id} />
           <KV k="경로" v={order.source} />
           <KV k="받는 날" v={dateKo(order.due_date)} />
-          <KV k="받는 분" v={`${order.recipient || "-"} ${order.phone}`} />
+          <KV
+            k="받는 분"
+            v={
+              <span>
+                {order.recipient || "-"}{" "}
+                {order.phone && (
+                  <a href={telHref(order.phone)} className="inline-flex items-center gap-1 text-parcel underline">
+                    <Phone className="h-4 w-4" />
+                    {order.phone}
+                  </a>
+                )}
+              </span>
+            }
+          />
           <KV k="주소" v={order.address || "-"} />
           <KV k="무게" v={`${kg(order.order_kg)}${order.ship_method === "화물" ? ` · 파레트 ${order.pallets}` : ` · 박스 ${order.boxes}`}`} />
-          {order.total_amount !== null && <KV k="공급가" v={won(order.total_amount)} />}
+          {order.total_amount !== null && <KV k={order.source === "웹주문서" ? "상품 금액" : "공급가"} v={won(order.total_amount)} />}
+          {order.shipping_fee > 0 && <KV k="택배비" v={won(order.shipping_fee)} />}
+          {order.source === "웹주문서" && orderTotal(order) !== null && <KV k="받을 돈" v={<b className="text-lg">{won(orderTotal(order)!)}</b>} />}
+          {order.source === "웹주문서" && (
+            <KV
+              k="입금"
+              v={
+                order.paid_at ? (
+                  <span>
+                    {dateTimeKo(order.paid_at)} 확인{" "}
+                    {order.status !== "취소" && (
+                      <button className="ml-1 text-sm text-stone-500 underline" onClick={() => act("unpaid", () => setOrderPaid(order.order_id, false), "입금 확인을 취소했어요.")}>
+                        취소
+                      </button>
+                    )}
+                  </span>
+                ) : (
+                  <Badge tone="amber">아직 확인 안 함</Badge>
+                )
+              }
+            />
+          )}
           {order.note && <KV k="특이사항" v={order.note} />}
           {order.tracking_no && <KV k="송장" v={`${order.carrier} ${order.tracking_no}`} />}
           {order.truck_no && <KV k="차량" v={`${order.truck_no} ${order.driver_phone}`} />}

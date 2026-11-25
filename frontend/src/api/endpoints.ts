@@ -63,6 +63,7 @@ export const listOrders = (q: { status?: string; method?: string; customer_id?: 
   api<{ orders: Order[]; count: number }>("/api/orders", { query: q }).then((r) => r.orders);
 export const getOrder = (id: string) => api<Order>(`/api/orders/${id}`);
 export const updateOrder = (id: string, patch: OrderPatch) => api<Order>(`/api/orders/${id}`, { method: "PATCH", body: patch });
+export const setOrderPaid = (id: string, paid: boolean) => api<Order>(`/api/orders/${encodeURIComponent(id)}/paid`, { body: { paid } });
 export const cancelOrder = (id: string) => api<Order>(`/api/orders/${id}/cancel`, { method: "POST" });
 export const productionSummary = (until?: string) => api<ProductionSummary>("/api/production/summary", { query: { until } });
 

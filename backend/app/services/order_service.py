@@ -226,17 +226,19 @@ class OrderService:
         return [(pmap[s], q) for s, q in merged.items()]
 
     @staticmethod
-    def _line_fields(p: ProductOut, qty: int) -> dict[str, Any]:
+    def _line_fields(p: ProductOut, qty: int, retail: bool = False) -> dict[str, Any]:
+        price = p.shop_price if retail else p.unit_price
         return {
             "sku": p.sku,
             "product_name": p.display_name,
             "qty": qty,
             "line_kg": line_kg(qty, p),
-            "unit_price": p.unit_price,
-            "amount": qty * p.unit_price if p.unit_price is not None else None,
+            "unit_price": price,
+            "amount": qty * price if price is not None else None,
         }
 
-    def create(self, body: OrderCreate, *, actor: str = "관리자") -> OrderOut:
+    def create(self, body: OrderCreate, *, actor: str = "관리자", retail: bool = False) -> OrderOut:
+        """retail=True: 웹 주문서처럼 개인 고객 주문 → 단가를 개인판매가로 기록한다."""
         st = self.settings.load()
         pmap = self.products.map(include_inactive=False)
         resolved = self._resolve_items(body.items, pmap)
@@ -250,7 +252,7 @@ class OrderService:
         if not customer_name:
             raise ValidationFailed("거래처를 골라 주세요.")
 
-        lines_data = [self._line_fields(p, q) for p, q in resolved]
+        lines_data = [self._line_fields(p, q, retail) for p, q in resolved]
         order_kg = round(sum(l["line_kg"] for l in lines_data), 3)
         method, by = decide_method(
             order_kg, st, manual=body.ship_method, customer_default=cust.default_method if cust else None
@@ -273,6 +275,7 @@ class OrderService:
             "note": body.note,
             "status": "접수",
             "ext_order_no": body.ext_order_no,
+            "shipping_fee": body.shipping_fee or None,
         }
 
         with self._id_lock:
@@ -339,7 +342,8 @@ class OrderService:
         deletes: list[tuple] = []
         if patch.items is not None:
             resolved = self._resolve_items(patch.items, pmap)
-            new_fields = [self._line_fields(p, q) for p, q in resolved]
+            retail = current.source == "웹주문서"  # 웹 주문은 고칠 때도 개인판매가 유지
+            new_fields = [self._line_fields(p, q, retail) for p, q in resolved]
             max_no = max((l.get("line_no") or 0) for l in old_lines)
             final_lines: list[dict[str, Any]] = []
             for idx, nf in enumerate(new_fields):
@@ -412,6 +416,17 @@ class OrderService:
         fields = {**fields, "updated_at": now()}
         self.orders.update_many([((order_id, l["line_no"]), fields) for l in lines])
         return lines
+
+    def set_paid(self, order_id: str, paid: bool, *, actor: str = "관리자") -> OrderOut:
+        """입금 확인 표시 / 취소. 웹 주문처럼 먼저 입금받는 주문에 쓴다."""
+        cur = self.get(order_id, fresh=True)
+        if cur.status == "취소":
+            raise ValidationFailed("취소된 주문이에요.")
+        self._set_status(order_id, {"paid_at": now() if paid else None})
+        out = self.get(order_id, fresh=True)
+        self.logs.write("입금 확인" if paid else "입금 확인 취소", order_id, out.customer_name, actor=actor)
+        self.bus.publish("order.updated", {"order": out})
+        return out
 
     def ship(self, order_id: str, *, actor: str = "관리자") -> OrderOut:
         cur = self.get(order_id, fresh=True)

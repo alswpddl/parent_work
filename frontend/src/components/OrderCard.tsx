@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Order } from "../api/types";
 import { dateKo, isPast, kg } from "../lib/format";
+import { needsPayment } from "../lib/orders";
 import { Badge, MethodBadge, StatusBadge, cx } from "./ui";
 
 export default function OrderCard({ order, onOpen, children, showMethod = true }: { order: Order; onOpen?: () => void; children?: ReactNode; showMethod?: boolean }) {
@@ -15,6 +16,9 @@ export default function OrderCard({ order, onOpen, children, showMethod = true }
           </div>
           <div className="flex flex-wrap gap-1">
             {showMethod && <MethodBadge method={order.ship_method} />}
+            {order.source === "웹주문서" && <Badge tone="violet">웹 주문</Badge>}
+            {needsPayment(order) && <Badge tone="amber">입금 전</Badge>}
+            {order.source === "웹주문서" && order.paid_at && <Badge tone="green">입금 ✔</Badge>}
             {order.status !== "접수" && <StatusBadge status={order.status} />}
             <Badge tone={late ? "red" : "gray"}>{dateKo(order.due_date)}{late ? " 지남" : ""}</Badge>
           </div>
@@ -30,7 +34,7 @@ export default function OrderCard({ order, onOpen, children, showMethod = true }
         <div className="mt-2 text-sm text-stone-500">
           {kg(order.order_kg)}
           {order.ship_method === "화물" ? ` · 파레트 ${order.pallets}` : ` · 박스 ${order.boxes}`}
-          {order.source !== "카톡" && ` · ${order.source}`}
+          {order.source !== "카톡" && order.source !== "웹주문서" && ` · ${order.source}`}
           {order.note && ` · ${order.note}`}
           {order.tracking_no && ` · 송장 ${order.tracking_no}`}
           {order.truck_no && ` · 차량 ${order.truck_no}`}

@@ -11,6 +11,11 @@ from app.schemas.order import OrderCreate, OrderItemIn
 from app.schemas.settings import SettingsPatch
 
 
+def _weekday(d):
+    """일요일(기본 휴무)이면 월요일로 — 테스트가 요일에 따라 깨지지 않게"""
+    return d + timedelta(days=1) if d.weekday() == 6 else d
+
+
 def _svc(ctx):
     return ctx.services["self_order"]
 
@@ -38,7 +43,7 @@ def test_form_and_place_order(full_ctx, http):
     with pytest.raises(ValidationFailed):
         _svc(full_ctx).place(tok, SelfOrderIn(items=[OrderItemIn(sku="SES-18L", qty=1)], due_date=today()))
     out = _svc(full_ctx).place(
-        tok, SelfOrderIn(items=[OrderItemIn(sku="PER-18L", qty=4)], due_date=today() + timedelta(days=2), note="문 앞")
+        tok, SelfOrderIn(items=[OrderItemIn(sku="PER-18L", qty=4)], due_date=_weekday(today() + timedelta(days=2)), note="문 앞")
     )
     assert out.status == "접수" and "들기름" in out.items
     saved = full_ctx.orders.get(out.order_id)

@@ -29,7 +29,22 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
     void reload();
   }, [reload]);
 
-  return { data, error, loading, reload, setData };
+  /** 화면 깜빡임 없이 뒤에서 새로 받기 (실패해도 지금 보이는 데이터는 그대로) */
+  const refresh = useCallback(async () => {
+    const my = ++seq.current;
+    try {
+      const v = await fnRef.current();
+      if (my === seq.current) {
+        setData(v);
+        setError("");
+        setLoading(false);
+      }
+    } catch {
+      /* 다음 번에 다시 시도 */
+    }
+  }, []);
+
+  return { data, error, loading, reload, refresh, setData };
 }
 
 /** 버튼 클릭 작업: 진행 중 표시 + 오류 메시지 */
@@ -47,4 +62,33 @@ export function useAction() {
     }
   }, []);
   return { busy, run };
+}
+
+/**
+ * 화면을 켜 둔 채로도 새 주문이 보이게: 다른 앱 보다가 돌아오면(탭이 다시 보이면) 바로,
+ * 보고 있는 동안은 everyMs 마다 다시 불러온다. 화면이 안 보일 때는 쉰다(데이터·배터리 절약).
+ */
+export function useAutoRefresh(reload: () => unknown, everyMs = 60_000) {
+  const ref = useRef(reload);
+  ref.current = reload;
+  useEffect(() => {
+    let last = Date.now();
+    const go = () => {
+      if (document.visibilityState !== "visible") return;
+      last = Date.now();
+      void ref.current();
+    };
+    const onVisible = () => {
+      // 잠깐 다른 탭에 다녀온 정도(10초 안)는 그냥 둔다
+      if (document.visibilityState === "visible" && Date.now() - last > 10_000) go();
+    };
+    const timer = window.setInterval(go, everyMs);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [everyMs]);
 }

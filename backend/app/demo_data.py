@@ -27,7 +27,8 @@ def seed_demo(ctx) -> None:
 def _p(sku, name, spec, unit, kg, upb, price, container, box, label, aliases="", desc=""):
     return {
         "sku": sku, "name": name, "spec": spec, "aliases": aliases, "unit": unit, "unit_kg": kg,
-        "units_per_box": upb, "unit_price": price, "description": desc, "shop_visible": True,
+        "units_per_box": upb, "unit_price": price, "retail_price": round(price * 1.25, -3),  # 예시: 개인판매가
+        "description": desc, "shop_visible": True,
         "container_item": container, "box_item": box, "label_item": label, "active": True,
     }
 
@@ -89,6 +90,7 @@ def seed_basics(ctx) -> None:
             company_biz_no="111-22-33333", company_owner="홍길동", bank_account="농협 000-0000-0000-00 홍길동",
             self_order_notice="오후 2시 전 주문은 다음 날 출고돼요.",
             shop_notice="오후 2시 전 주문은 다음 날 출고돼요. 입금 확인 후 보내 드려요.",
+            shop_shipping_fee=4000, shop_free_shipping_over=50000,
         )
     )
 

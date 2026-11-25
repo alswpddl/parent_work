@@ -142,6 +142,11 @@ function BasicTab() {
           <Toggle checked={v.shop_show_prices} onChange={(x) => set({ shop_show_prices: x })} label="주문서에 가격 보이기" />
           {text("shop_notice", "주문서 맨 위 안내 문구", "예) 오후 2시 전 주문은 다음 날 출고 · 입금 확인 후 발송")}
           {text("privacy_retention", "개인정보 보관 기간", "주문서 동의 문구에 그대로 나와요")}
+          <div className="grid gap-x-3 md:grid-cols-2">
+            {number("shop_shipping_fee", "택배비 (원)", "0 이면 '택배비는 확인 후 안내'로 보여요")}
+            {number("shop_free_shipping_over", "이 금액 이상이면 택배비 무료 (원)", "0 이면 무료 없음")}
+          </div>
+          {text("closed_days", "받는 날로 못 고르는 요일", "예) 일 / 토,일 / 없음 — 거래처 주문 링크에도 똑같이 적용돼요")}
           <p className="text-sm text-stone-500">받는 날은 위 '거래처 셀프 주문'의 최소 준비일을 같이 써요. 입금 계좌는 주문 완료 화면에 보여요.</p>
         </Card>
       )}
@@ -242,7 +247,7 @@ function CustomersTab() {
       {edit && (
         <CustomerModal
           value={edit}
-          busy={!!busy}
+          busy={busy === "save"}
           onClose={() => setEdit(null)}
           onSave={(v) =>
             run("save", async () => {
@@ -304,7 +309,7 @@ function CustomerModal({ value, busy, onClose, onSave }: { value: Partial<Custom
 }
 
 // ================================================================ 품목
-const EMPTY_PRODUCT: Partial<Product> = { name: "", spec: "", aliases: "", description: "", shop_visible: true, unit: "통", unit_kg: 0, units_per_box: null, unit_price: null, tax_type: "", container_item: "", box_item: "", label_item: "" };
+const EMPTY_PRODUCT: Partial<Product> = { name: "", spec: "", aliases: "", description: "", shop_visible: true, sold_out: false, unit: "통", unit_kg: 0, units_per_box: null, unit_price: null, retail_price: null, tax_type: "", container_item: "", box_item: "", label_item: "" };
 
 function ProductsTab() {
   const toast = useToast();
@@ -317,20 +322,42 @@ function ProductsTab() {
       <Button size="md" className="mb-3" icon={<Plus className="h-5 w-5" />} onClick={() => setEdit({ ...EMPTY_PRODUCT })}>품목 추가</Button>
       <LoadState loading={list.loading} error={list.error} onRetry={list.reload} />
       {list.data?.map((p) => (
-        <button key={p.sku} onClick={() => setEdit(p)} className={`mb-2 block w-full rounded-2xl border border-line bg-white p-4 text-left ${p.active ? "" : "opacity-60"}`}>
+        <div key={p.sku} className={`mb-2 rounded-2xl border border-line bg-white ${p.active ? "" : "opacity-60"}`}>
+        <button onClick={() => setEdit(p)} className="block w-full p-4 pb-2 text-left">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-lg font-extrabold">{p.name} {p.spec} <span className="text-sm font-normal text-stone-500">{p.sku}</span></div>
             <div className="flex gap-1">
               {p.tax_type && <Badge>{p.tax_type}</Badge>}
               {has("q2_web_order") && !p.shop_visible && p.active && <Badge tone="amber">주문서 숨김</Badge>}
+              {has("q2_web_order") && p.sold_out && p.active && <Badge tone="red">품절</Badge>}
               {!p.active && <Badge>숨김</Badge>}
             </div>
           </div>
           <div className="text-sm text-stone-500">
             1{p.unit} {p.unit_kg}kg{p.units_per_box ? ` · 박스당 ${p.units_per_box}${p.unit}` : ""}{p.unit_price !== null ? ` · ${won(p.unit_price)}` : " · 단가 없음"}
+            {has("q2_web_order") && p.retail_price !== null && ` · 개인 ${won(p.retail_price)}`}
             {has("q4_inventory") && (p.container_item || p.box_item || p.label_item) && ` · 자재 ${[p.container_item, p.box_item, p.label_item].filter(Boolean).join("/")}`}
           </div>
         </button>
+        {has("q2_web_order") && p.active && (
+          <div className="px-4 pb-3">
+            <Button
+              size="sm"
+              variant={p.sold_out ? "soft" : "ghost"}
+              loading={busy === `so-${p.sku}`}
+              onClick={() =>
+                run(`so-${p.sku}`, async () => {
+                  const updated = await updateProduct(p.sku, { sold_out: !p.sold_out });
+                  list.setData((xs) => xs?.map((x) => (x.sku === p.sku ? updated : x)));
+                  toast(updated.sold_out ? `${p.name} ${p.spec} 품절로 바꿨어요.` : `${p.name} ${p.spec} 다시 팔아요.`);
+                }, (m) => toast(m, "error"))
+              }
+            >
+              {p.sold_out ? "다시 팔기" : "품절로 바꾸기"}
+            </Button>
+          </div>
+        )}
+        </div>
       ))}
       {edit && (
         <ProductModal
@@ -339,7 +366,8 @@ function ProductsTab() {
           onClose={() => setEdit(null)}
           onSave={(v) =>
             run("save", async () => {
-              const body = { ...v, unit_kg: Number(v.unit_kg) || 0, units_per_box: v.units_per_box ? Number(v.units_per_box) : null, unit_price: v.unit_price === null || v.unit_price === undefined || String(v.unit_price) === "" ? null : Number(v.unit_price) };
+              const money = (x: unknown) => (x === null || x === undefined || String(x) === "" ? null : Number(x));
+              const body = { ...v, unit_kg: Number(v.unit_kg) || 0, units_per_box: v.units_per_box ? Number(v.units_per_box) : null, unit_price: money(v.unit_price), retail_price: money(v.retail_price) };
               if (v.sku && list.data?.some((p) => p.sku === v.sku)) await updateProduct(v.sku, body);
               else await createProduct(body);
               toast("저장했어요.");
@@ -374,6 +402,7 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
         {inp("unit_kg", "1개 무게 (kg, 포장 포함)", undefined, "number")}
         {inp("units_per_box", "한 박스에 몇 개", "택배 박스 수·박스 자재 계산", "number")}
         {inp("unit_price", "공급 단가 (원, 부가세 별도)", "월말 정산에 써요", "number")}
+        {has("q2_web_order") && inp("retail_price", "개인 판매가 (원, 웹 주문서)", "비우면 공급 단가를 보여 줘요", "number")}
         {has("q4_settlement") && (
           <Field label="과세 구분">
             <Select value={v.tax_type ?? ""} onChange={(e) => set({ tax_type: e.target.value as Product["tax_type"] })}>
@@ -398,6 +427,7 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
         <>
           {inp("description", "주문서 설명 (한 줄)", "웹 주문서 품목 아래에 보여요. 예) 김장용 추젓")}
           <Toggle checked={v.shop_visible !== false} onChange={(x) => set({ shop_visible: x })} label="웹 주문서에 보이기" />
+          <Toggle checked={!!v.sold_out} onChange={(x) => set({ sold_out: x })} label="품절 (주문서에 '품절'로 보이고 주문은 안 받아요)" />
         </>
       )}
       {!isNew && <Toggle checked={v.active !== false} onChange={(x) => set({ active: x })} label="판매 중 (끄면 주문 화면에서 숨김)" />}

@@ -80,6 +80,7 @@ class OrderCreate(BaseModel):
     source: OrderSource = "카톡"
     raw_text: str = Field(default="", max_length=5000)
     ext_order_no: str = Field(default="", max_length=60, description="오픈마켓 주문번호 (중복 방지)")
+    shipping_fee: int = Field(default=0, ge=0, le=1_000_000)
 
     @field_validator("customer_name", "recipient", "phone", "address", "zipcode", "note", mode="before")
     @classmethod
@@ -137,7 +138,9 @@ class OrderOut(BaseModel):
     pallets: int = 0
     boxes: int = 0
     total_amount: int | None = None
+    shipping_fee: int = 0
     shipped_at: datetime | None = None
+    paid_at: datetime | None = None  # 입금 확인 시각 (웹 주문)
     # 3분기
     carrier: str = ""
     tracking_no: str = ""

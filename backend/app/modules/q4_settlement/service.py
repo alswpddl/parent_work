@@ -1,6 +1,7 @@
 """월말 정산 · 거래명세표.
 
 - 대상: 그 달에 '출고완료'된 B2B 주문 (출고일시 기준, 비어 있으면 납기일 → 접수일)
+  개인(B2C) 고객 주문과 '입금확인'된 주문(선입금)은 빠진다
 - 세액: 품목 '과세구분'이 면세가 아니면 공급가액의 10% (원 단위 반올림)
 - 정산ID: S-202611-C0001. 다시 만들면 같은 ID 를 덮어쓴다. 단, 이미 발송·수금된 건은 force 없이는 건드리지 않음
 - 주문장 '정산ID' 칸에 연결해 두므로, 시트에서도 어느 주문이 어느 명세서에 들어갔는지 볼 수 있다
@@ -129,9 +130,13 @@ class SettlementService:
     def _collect(self, period: str) -> dict[str, list[OrderOut]]:
         start, end = month_range(period)
         by_cust: dict[str, list[OrderOut]] = {}
+        # 개인 고객(B2C)은 주문할 때 바로 입금하므로 월말 정산에서 뺀다. 이미 입금 확인한 주문도 뺀다.
+        b2c = {c.customer_id for c in self.ctx.customers.list(include_inactive=True) if c.type == "B2C"}
         for o in self.ctx.orders.query(statuses=["출고완료"]):
             d = _order_day(o)
             if not o.customer_id or not d or not (start <= d <= end):
+                continue
+            if o.customer_id in b2c or o.paid_at:
                 continue
             by_cust.setdefault(o.customer_id, []).append(o)
         return by_cust

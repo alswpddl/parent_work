@@ -21,6 +21,7 @@ from ...core.ids import random_token
 from ...core.timeutil import fmt_date_ko, today
 from ...schemas.customer import CustomerOut
 from ...schemas.order import OrderCreate, OrderItemIn, OrderOut
+from ...schemas.settings import WEEKDAYS_KO, closed_weekdays
 
 
 # ---------------------------------------------------------------- 입출력 모델
@@ -69,6 +70,7 @@ class PublicOrderOut(BaseModel):
     carrier: str = ""
     tracking_no: str = ""
     truck_no: str = ""
+    paid: bool = False  # 입금 확인됨
 
 
 def to_public(o: OrderOut) -> PublicOrderOut:
@@ -82,7 +84,19 @@ def to_public(o: OrderOut) -> PublicOrderOut:
         carrier=o.carrier,
         tracking_no=o.tracking_no,
         truck_no=o.truck_no,
+        paid=o.paid_at is not None,
     )
+
+
+def _min_due(st) -> date:
+    """준비일만큼 뒤 + 쉬는 요일이면 다음 날로."""
+    d = today() + timedelta(days=st.self_order_lead_days)
+    closed = closed_weekdays(st.closed_days)
+    for _ in range(7):
+        if d.weekday() not in closed:
+            return d
+        d += timedelta(days=1)
+    return today() + timedelta(days=st.self_order_lead_days)
 
 
 class _Limiter:
@@ -159,7 +173,7 @@ class SelfOrderService:
             customer_name=c.name,
             address=c.address,
             notice=st.self_order_notice,
-            min_due_date=today() + timedelta(days=st.self_order_lead_days),
+            min_due_date=_min_due(st),
             products=products,
             last_items=last_items,
         )
@@ -168,9 +182,11 @@ class SelfOrderService:
         c = self.customer_by_token(token)
         self.order_limiter.hit(token)
         st = self.ctx.settings.load()
-        min_due = today() + timedelta(days=st.self_order_lead_days)
+        min_due = _min_due(st)
         if body.due_date and body.due_date < min_due:
             raise ValidationFailed(f"받는 날짜는 {fmt_date_ko(min_due)} 이후로 골라 주세요.")
+        if body.due_date and body.due_date.weekday() in closed_weekdays(st.closed_days):
+            raise ValidationFailed(f"{WEEKDAYS_KO[body.due_date.weekday()]}요일은 택배가 쉬어요. 다른 날을 골라 주세요.")
         order = self.ctx.orders.create(
             OrderCreate(
                 customer_id=c.customer_id,
@@ -205,4 +221,7 @@ class SelfOrderService:
             f"납기 {fmt_date_ko(o.due_date)} · {o.ship_method} · {o.order_kg:g}kg"
             + (f"\n메모: {o.note}" if o.note else "")
         )
+        if o.source == "웹주문서":
+            money = (o.total_amount or 0) + o.shipping_fee
+            text += f"\n☎ {o.phone}" + (f"\n💰 {money:,}원 입금 확인 필요" if o.total_amount is not None else "")
         self.ctx.notifier.send("셀프주문", text, path="/orders", button="주문 보기")

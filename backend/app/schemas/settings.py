@@ -25,6 +25,9 @@ SETTING_DEFS: list[tuple[str, str, str, str]] = [
     ("shop_show_prices", "웹 주문서에 가격 보이기", "예", "예 / 아니오"),
     ("shop_notice", "웹 주문서 안내 문구", "", "주문서 맨 위에 보이는 문구 (예: 오후 2시 전 주문은 당일 출고)"),
     ("privacy_retention", "개인정보 보관 기간", "주문일로부터 1년", "웹 주문서 개인정보 동의 문구에 표시"),
+    ("shop_shipping_fee", "웹 주문 택배비(원)", "0", "0 이면 '택배비는 확인 후 안내'로 표시"),
+    ("shop_free_shipping_over", "택배비 무료 기준 금액(원)", "0", "이 금액 이상 주문하면 택배비 무료. 0 이면 무료 없음"),
+    ("closed_days", "받는 날로 못 고르는 요일", "일", "쉼표로 (예: 일 또는 토,일). 택배가 쉬는 날. 없으면 '없음'"),
     # --- 3분기: 알림톡
     ("notify_customers", "거래처 출고 알림톡 보내기", "예", "예 / 아니오"),
     # --- 4분기: 재고·정산·리마인드
@@ -60,6 +63,9 @@ class AppSettings(BaseModel):
     shop_show_prices: bool = True
     shop_notice: str = ""
     privacy_retention: str = "주문일로부터 1년"
+    shop_shipping_fee: int = Field(default=0, ge=0, le=100_000)
+    shop_free_shipping_over: int = Field(default=0, ge=0)
+    closed_days: str = "일"
     notify_customers: bool = True
     stock_alert_enabled: bool = True
     stock_lead_days: int = Field(default=5, ge=0, le=90)
@@ -100,6 +106,9 @@ class SettingsPatch(BaseModel):
     shop_show_prices: bool | None = None
     shop_notice: str | None = None
     privacy_retention: str | None = Field(default=None, max_length=60)
+    shop_shipping_fee: int | None = Field(default=None, ge=0, le=100_000)
+    shop_free_shipping_over: int | None = Field(default=None, ge=0)
+    closed_days: str | None = Field(default=None, max_length=20)
     notify_customers: bool | None = None
     stock_alert_enabled: bool | None = None
     stock_lead_days: int | None = Field(default=None, ge=0, le=90)
@@ -111,3 +120,11 @@ class SettingsPatch(BaseModel):
     statement_note: str | None = None
     reorder_factor: float | None = Field(default=None, ge=1.0, le=5.0)
     reorder_min_orders: int | None = Field(default=None, ge=2, le=50)
+
+
+WEEKDAYS_KO = "월화수목금토일"
+
+
+def closed_weekdays(text: str) -> set[int]:
+    """'토,일' → {5, 6} (월=0). 모르는 글자는 무시."""
+    return {WEEKDAYS_KO.index(ch) for ch in (text or "") if ch in WEEKDAYS_KO}
