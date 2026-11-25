@@ -1,7 +1,7 @@
 """메모리 모드(구글 시트 연결 전)에서 바로 눌러볼 수 있는 예시 데이터 — 젓갈 공장 기준.
 
-- 품목 6개 (새우젓·명란젓·오징어젓·낙지젓·멸치액젓, 자재 매핑 포함)
-- 거래처 3곳, 자재 10종, 공장 설정
+- 품목 6개 (새우젓·명란젓·오징어젓·낙지젓·멸치액젓, 용기·뚜껑·라벨·박스·저장고 매핑 포함)
+- 거래처 3곳, 자재 19종(저장고 젓갈 kg 포함), 공장 설정
 - 지난 두 달치 출고 완료 주문 (→ 월말 정산·리마인드 화면이 비어 있지 않게)
 - 출고 대기 주문 3건 (웹 주문서 1건 포함)
 
@@ -24,8 +24,9 @@ def seed_demo(ctx) -> None:
     seed_history(ctx)
 
 
-def _p(sku, name, spec, unit, kg, upb, price, container, box, label, aliases="", desc=""):
+def _p(sku, name, spec, unit, kg, upb, price, container, box, label, aliases="", desc="", lid="", bulk=""):
     return {
+        "lid_item": lid, "bulk_item": bulk,
         "sku": sku, "name": name, "spec": spec, "aliases": aliases, "unit": unit, "unit_kg": kg,
         "units_per_box": upb, "unit_price": price, "retail_price": round(price * 1.25, -3),  # 예시: 개인판매가
         "description": desc, "shop_visible": True,
@@ -37,17 +38,17 @@ def seed_basics(ctx) -> None:
     ctx.products.insert_many(
         [
             _p("SAE-1K", "새우젓(추젓)", "1kg", "통", 1.15, 12, 18000, "CT-1K", "BOX-12", "LBL-SAE",
-               "새우젓, 추젓, 새우젓 1키로", "가을 추젓으로 담근 새우젓. 김장·찌개용"),
+               "새우젓, 추젓, 새우젓 1키로", "가을 추젓으로 담근 새우젓. 김장·찌개용", "LID-S", "BULK-SAE"),
             _p("SAE-5K", "새우젓(추젓)", "5kg", "통", 5.4, 2, 80000, "CT-5K", "BOX-2", "LBL-SAE",
-               "새우젓 5키로, 추젓 5키로, 새우젓 큰통", "업소·김장용 대용량"),
+               "새우젓 5키로, 추젓 5키로, 새우젓 큰통", "업소·김장용 대용량", "LID-L", "BULK-SAE"),
             _p("MYE-500", "명란젓", "500g", "통", 0.6, 20, 22000, "CT-500", "BOX-20", "LBL-MYE",
-               "명란, 명란젓갈", "저염 명란젓"),
+               "명란, 명란젓갈", "저염 명란젓", "LID-S", "BULK-MYE"),
             _p("OJI-1K", "오징어젓", "1kg", "통", 1.15, 12, 15000, "CT-1K", "BOX-12", "LBL-OJI",
-               "오징어젓갈, 오징어", "반찬용 오징어젓"),
+               "오징어젓갈, 오징어", "반찬용 오징어젓", "LID-S", "BULK-OJI"),
             _p("NAK-1K", "낙지젓", "1kg", "통", 1.15, 12, 25000, "CT-1K", "BOX-12", "LBL-NAK",
-               "낙지젓갈, 낙지", "매콤한 낙지젓"),
+               "낙지젓갈, 낙지", "매콤한 낙지젓", "LID-S", "BULK-NAK"),
             _p("AEK-9K", "멸치액젓", "9kg", "말통", 9.6, None, 30000, "CT-9K", "", "LBL-AEK",
-               "액젓, 멸치액젓 말통, 액젓 한말", "김장용 멸치액젓 한 말"),
+               "액젓, 멸치액젓 말통, 액젓 한말", "김장용 멸치액젓 한 말", "LID-L", "BULK-AEK"),
         ]
     )
     ctx.customers.insert_many(
@@ -70,10 +71,17 @@ def seed_basics(ctx) -> None:
     }
     inv.insert_many(
         [
+            item("BULK-SAE", "저장고", "새우젓(추젓) 저장고", "kg", 420.5, 150, 500, "OO수산"),
+            item("BULK-MYE", "저장고", "명란젓 저장고", "kg", 38, 20, 100, "OO수산"),
+            item("BULK-OJI", "저장고", "오징어젓 저장고", "kg", 65, 30, 100, "OO수산"),
+            item("BULK-NAK", "저장고", "낙지젓 저장고", "kg", 12.5, 20, 60, "OO수산"),
+            item("BULK-AEK", "저장고", "멸치액젓 저장고", "kg", 860, 300, 1000, "OO수산"),
             item("CT-500", "용기", "500g 통", "개", 300, 150, 1000, "OO용기"),
             item("CT-1K", "용기", "1kg 통", "개", 650, 400, 2000, "OO용기"),
             item("CT-5K", "용기", "5kg 통", "개", 60, 40, 200, "OO용기"),
             item("CT-9K", "용기", "9kg 말통", "개", 25, 30, 100, "OO용기"),
+            item("LID-S", "뚜껑", "소형 뚜껑 (500g·1kg 통)", "개", 900, 500, 2000, "OO용기"),
+            item("LID-L", "뚜껑", "대형 뚜껑 (5kg 통·9kg 말통)", "개", 70, 50, 200, "OO용기"),
             item("BOX-12", "박스", "1kg×12 박스", "개", 120, 50, 300, "OO박스"),
             item("BOX-20", "박스", "500g×20 박스", "개", 40, 20, 100, "OO박스"),
             item("BOX-2", "박스", "5kg×2 박스", "개", 50, 30, 150, "OO박스"),

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 
 from ...api.deps import get_ctx, require_admin
 from ...context import AppContext
-from .service import AdjustIn, ItemIn, ItemOut, ItemPatch, MoveOut, ReceiveIn
+from .service import AdjustIn, ItemIn, ItemOut, ItemPatch, MoveOut, NeedOut, ReceiveIn, StocktakeIn, StocktakeOut
 
 router = APIRouter(prefix="/api/inventory", tags=["inventory"], dependencies=[Depends(require_admin)])
 
@@ -21,6 +23,18 @@ def list_items(ctx: AppContext = Depends(get_ctx)) -> list[ItemOut]:
 @router.post("", response_model=ItemOut, status_code=201)
 def create_item(body: ItemIn, ctx: AppContext = Depends(get_ctx)) -> ItemOut:
     return _svc(ctx).create(body)
+
+
+@router.get("/needs", response_model=list[NeedOut])
+def needs(until: date | None = Query(default=None, description="이 날까지 받는 주문 (비우면 출고 전 전부)"), ctx: AppContext = Depends(get_ctx)) -> list[NeedOut]:
+    """출고 전 주문들이 쓸 자재·저장고 젓갈 vs 지금 재고 (오늘의 할당량 화면용)"""
+    return _svc(ctx).needs(until)
+
+
+@router.post("/stocktake", response_model=StocktakeOut)
+def stocktake(body: StocktakeIn, ctx: AppContext = Depends(get_ctx)) -> StocktakeOut:
+    """재고 한꺼번에 입력"""
+    return _svc(ctx).stocktake(body)
 
 
 @router.get("/moves", response_model=list[MoveOut])

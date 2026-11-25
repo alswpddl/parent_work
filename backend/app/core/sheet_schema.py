@@ -153,6 +153,9 @@ PRODUCTS = TabSpec(
         C("container_item", "용기자재", quarter=4),
         C("box_item", "박스자재", quarter=4),
         C("label_item", "라벨자재", quarter=4),
+        C("lid_item", "뚜껑자재", quarter=4),
+        C("bulk_item", "저장고품목", quarter=4),  # 출고하면 내용량(kg)×수량만큼 저장고에서 빠짐
+        C("net_kg", "내용량kg", "float", quarter=4),  # 비우면 규격(1kg, 500g)에서 읽음
         C("active", "사용", "bool"),
     ),
 )
@@ -169,9 +172,9 @@ INVENTORY = TabSpec(
         C("category", "분류", quarter=4),
         C("name", "자재명", quarter=4),
         C("unit", "단위", quarter=4),
-        C("stock", "현재고", "int", quarter=4),
-        C("safety_stock", "안전재고", "int", quarter=4),
-        C("reorder_qty", "권장발주량", "int", quarter=4),
+        C("stock", "현재고", "float", quarter=4),  # 저장고 젓갈은 kg 소수점
+        C("safety_stock", "안전재고", "float", quarter=4),
+        C("reorder_qty", "권장발주량", "float", quarter=4),
         C("supplier", "매입처", quarter=4),
         C("supplier_phone", "매입처연락처", text=True, quarter=4),
         C("last_alert_at", "마지막경고", "datetime", quarter=4),
@@ -255,8 +258,8 @@ STOCK_MOVES = TabSpec(
         C("ts", "일시", "datetime", quarter=4),
         C("item_id", "자재코드", quarter=4),
         C("item_name", "자재명", quarter=4),
-        C("change", "변동", "int", quarter=4),
-        C("stock_after", "변동후재고", "int", quarter=4),
+        C("change", "변동", "float", quarter=4),
+        C("stock_after", "변동후재고", "float", quarter=4),
         C("reason", "사유", quarter=4),
         C("order_id", "주문번호", quarter=4),
     ),

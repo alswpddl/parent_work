@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -25,8 +26,11 @@ class ProductBase(BaseModel):
     container_item: str = ""
     box_item: str = ""
     label_item: str = ""
+    lid_item: str = ""
+    bulk_item: str = ""
+    net_kg: float | None = Field(default=None, gt=0, le=2000)
 
-    @field_validator("name", "spec", "aliases", "unit", "description", "container_item", "box_item", "label_item", mode="before")
+    @field_validator("name", "spec", "aliases", "unit", "description", "container_item", "box_item", "label_item", "lid_item", "bulk_item", mode="before")
     @classmethod
     def _strip(cls, v):
         return (v or "").strip()
@@ -53,6 +57,9 @@ class ProductPatch(BaseModel):
     container_item: str | None = None
     box_item: str | None = None
     label_item: str | None = None
+    lid_item: str | None = None
+    bulk_item: str | None = None
+    net_kg: float | None = Field(default=None, gt=0, le=2000)
 
 
 class ProductOut(ProductBase):
@@ -62,6 +69,17 @@ class ProductOut(ProductBase):
     @property
     def display_name(self) -> str:
         return f"{self.name} {self.spec}".strip()
+
+    @property
+    def content_kg(self) -> float:
+        """젓갈 내용량(kg). 내용량kg 칸 → 없으면 규격('1kg', '500g', '1.5키로')에서 읽음 → 그래도 없으면 0."""
+        if self.net_kg:
+            return self.net_kg
+        m = re.search(r"(\d+(?:\.\d+)?)\s*(kg|키로|킬로|g|그램)", self.spec.lower())
+        if not m:
+            return 0.0
+        v = float(m.group(1))
+        return v / 1000 if m.group(2) in ("g", "그램") else v
 
     @property
     def shop_price(self) -> int | None:
@@ -94,6 +112,9 @@ class ProductOut(ProductBase):
             container_item=d.get("container_item") or "",
             box_item=d.get("box_item") or "",
             label_item=d.get("label_item") or "",
+            lid_item=d.get("lid_item") or "",
+            bulk_item=d.get("bulk_item") or "",
+            net_kg=d.get("net_kg") if (d.get("net_kg") or 0) > 0 else None,
         )
 
     def alias_list(self) -> list[str]:

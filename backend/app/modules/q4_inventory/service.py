@@ -1,7 +1,9 @@
 """원부자재 재고.
 
-- 품목 탭의 '용기자재/박스자재/라벨자재' 열에 자재코드를 적어 두면
-  출고 완료 때 자동으로 차감: 용기·라벨 = 수량만큼, 박스 = 수량 ÷ 박스입수 (올림)
+- 품목 탭의 '용기자재/뚜껑자재/라벨자재/박스자재/저장고품목' 열에 자재코드를 적어 두면
+  출고 완료 때 자동으로 차감: 용기·뚜껑·라벨 = 수량만큼, 박스 = 수량 ÷ 박스입수 (올림),
+  저장고(젓갈 kg) = 내용량kg × 수량
+- 재고는 소수점까지 (저장고 152.5kg 처럼)
 - 같은 주문을 두 번 차감하지 않도록 주문장 '재고차감' 칸을 TRUE 로 표시
 - 출고 되돌리기·출고 후 취소 → 다시 더해 줌
 - 모든 변동은 '_재고이력' 탭에 한 줄씩 남는다
@@ -28,6 +30,13 @@ from ...schemas.product import ProductOut
 
 log = logging.getLogger(__name__)
 USAGE_WINDOW_DAYS = 30
+CATEGORY_ORDER = ["저장고", "용기", "뚜껑", "라벨", "박스"]
+
+
+def fmt_qty(v: float) -> str:
+    """150.0 → '150', 152.5 → '152.5', 1500 → '1,500'"""
+    v = round(float(v), 3)
+    return f"{int(v):,}" if v.is_integer() else f"{v:,.3f}".rstrip("0").rstrip(".")
 
 
 # ---------------------------------------------------------------- 모델
@@ -36,9 +45,9 @@ class ItemIn(BaseModel):
     category: str = "기타"
     name: str = Field(min_length=1, max_length=60)
     unit: str = "개"
-    stock: int = Field(default=0, ge=0)
-    safety_stock: int = Field(default=0, ge=0)
-    reorder_qty: int = Field(default=0, ge=0)
+    stock: float = Field(default=0, ge=0)
+    safety_stock: float = Field(default=0, ge=0)
+    reorder_qty: float = Field(default=0, ge=0)
     supplier: str = ""
     supplier_phone: str = ""
 
@@ -47,20 +56,41 @@ class ItemPatch(BaseModel):
     category: str | None = None
     name: str | None = Field(default=None, min_length=1, max_length=60)
     unit: str | None = None
-    safety_stock: int | None = Field(default=None, ge=0)
-    reorder_qty: int | None = Field(default=None, ge=0)
+    safety_stock: float | None = Field(default=None, ge=0)
+    reorder_qty: float | None = Field(default=None, ge=0)
     supplier: str | None = None
     supplier_phone: str | None = None
 
 
 class ReceiveIn(BaseModel):
-    qty: int = Field(ge=1, le=10_000_000)
+    qty: float = Field(gt=0, le=10_000_000)
     memo: str = ""
 
 
 class AdjustIn(BaseModel):
-    stock: int = Field(ge=0, le=10_000_000)
+    stock: float = Field(ge=0, le=10_000_000)
     reason: str = Field(min_length=1, max_length=100)
+
+
+class StocktakeIn(BaseModel):
+    """재고 한꺼번에 입력: {자재코드: 실제로 센 양}. 바뀐 것만 반영된다."""
+
+    counts: dict[str, float] = Field(min_length=1)
+    reason: str = Field(default="재고 조사", min_length=1, max_length=100)
+
+
+
+
+class NeedOut(BaseModel):
+    """출고 전 주문들이 쓸 자재 vs 지금 재고"""
+
+    item_id: str
+    name: str
+    category: str
+    unit: str
+    need: float
+    stock: float
+    short: float  # 모자라는 양 (0 이면 충분)
 
 
 class ItemOut(BaseModel):
@@ -68,9 +98,9 @@ class ItemOut(BaseModel):
     category: str
     name: str
     unit: str
-    stock: int
-    safety_stock: int
-    reorder_qty: int
+    stock: float
+    safety_stock: float
+    reorder_qty: float
     supplier: str
     supplier_phone: str
     status: str  # 정상 / 곧부족 / 부족 / 없음
@@ -80,30 +110,45 @@ class ItemOut(BaseModel):
     used_by: list[str]  # 이 자재를 쓰는 품목
 
 
+class StocktakeOut(BaseModel):
+    changed: int
+    items: list[ItemOut]
+
+
 class MoveOut(BaseModel):
     ts: str
     item_id: str
     item_name: str
-    change: int
-    stock_after: int
+    change: float
+    stock_after: float
     reason: str
     order_id: str
 
 
-def requirements(order: OrderOut, pmap: dict[str, ProductOut]) -> dict[str, int]:
-    need: dict[str, int] = {}
+def requirements(order: OrderOut, pmap: dict[str, ProductOut]) -> dict[str, float]:
+    """주문 하나가 쓰는 자재: {자재코드: 양}"""
+    need: dict[str, float] = {}
+
+    def add(code: str, qty: float) -> None:
+        if code and qty:
+            need[code] = round(need.get(code, 0) + qty, 3)
+
     for l in order.lines:
         p = pmap.get(l.sku)
         if not p or l.qty <= 0:
             continue
-        if p.container_item:
-            need[p.container_item] = need.get(p.container_item, 0) + l.qty
-        if p.label_item:
-            need[p.label_item] = need.get(p.label_item, 0) + l.qty
+        add(p.container_item, l.qty)
+        add(p.lid_item, l.qty)
+        add(p.label_item, l.qty)
         if p.box_item:
-            boxes = math.ceil(l.qty / p.units_per_box) if p.units_per_box else l.qty
-            need[p.box_item] = need.get(p.box_item, 0) + boxes
+            add(p.box_item, math.ceil(l.qty / p.units_per_box) if p.units_per_box else l.qty)
+        if p.bulk_item:
+            add(p.bulk_item, p.content_kg * l.qty)
     return need
+
+
+def _material_codes(p: ProductOut) -> set[str]:
+    return {p.container_item, p.box_item, p.label_item, p.lid_item, p.bulk_item} - {""}
 
 
 class InventoryService:
@@ -115,7 +160,7 @@ class InventoryService:
     # ---------------------------------------------------------------- 조회
     def _usage(self, day: date) -> dict[str, float]:
         since = day - timedelta(days=USAGE_WINDOW_DAYS)
-        used: dict[str, int] = {}
+        used: dict[str, float] = {}
         for m in self.moves.rows():
             ts = m.get("ts")
             if not ts or ts.date() < since or (m.get("change") or 0) >= 0:
@@ -131,7 +176,7 @@ class InventoryService:
         usage = self._usage(day)
         used_by: dict[str, list[str]] = {}
         for p in self.ctx.products.list():
-            for code in {p.container_item, p.box_item, p.label_item} - {""}:
+            for code in _material_codes(p):
                 used_by.setdefault(code, []).append(p.display_name)
         out = []
         for d in self.items.rows():
@@ -161,7 +206,8 @@ class InventoryService:
                 )
             )
         rank = {"없음": 0, "부족": 1, "곧부족": 2, "정상": 3}
-        return sorted(out, key=lambda i: (rank[i.status], i.category, i.name))
+        cat = {c: i for i, c in enumerate(CATEGORY_ORDER)}
+        return sorted(out, key=lambda i: (rank[i.status], cat.get(i.category, 99), i.category, i.name))
 
     def recent_moves(self, item_id: str | None = None, limit: int = 100) -> list[MoveOut]:
         rows = [m for m in self.moves.rows() if not item_id or m.get("item_id") == item_id]
@@ -200,12 +246,51 @@ class InventoryService:
 
     def adjust(self, item_id: str, body: AdjustIn) -> ItemOut:
         d = self._require(item_id)
-        delta = body.stock - (d.get("stock") or 0)
+        delta = round(body.stock - (d.get("stock") or 0), 3)
         if delta:
             self.apply({item_id: delta}, reason=f"실사조정 · {body.reason}")
         return self._one(item_id)
 
-    def apply(self, changes: dict[str, int], *, reason: str, order_id: str = "") -> list[str]:
+    def stocktake(self, body: StocktakeIn) -> StocktakeOut:
+        """여러 자재를 한 번에 '실제로 센 양'으로 맞춘다 (시트 쓰기 2번)."""
+        current = {d["item_id"]: d for d in self.items.rows(fresh=True) if d.get("item_id")}
+        unknown = [k for k in body.counts if k not in current]
+        if unknown:
+            raise ValidationFailed(f"없는 자재코드예요: {', '.join(unknown)}")
+        deltas = {}
+        for k, v in body.counts.items():
+            if v < 0:
+                raise ValidationFailed("재고는 0 이상으로 넣어 주세요.")
+            d = round(v - (current[k].get("stock") or 0), 3)
+            if d:
+                deltas[k] = d
+        if deltas:
+            self.apply(deltas, reason=f"실사조정 · {body.reason}")
+            self.ctx.logs.write("재고 조사", f"{len(deltas)}개", body.reason)
+        return StocktakeOut(changed=len(deltas), items=self.list_items())
+
+    def needs(self, until: date | None = None) -> list[NeedOut]:
+        """아직 출고 안 한 주문(받는 날 ≤ until, 날짜 미정 포함)에 필요한 자재 vs 지금 재고."""
+        pmap = self.ctx.products.map()
+        total: dict[str, float] = {}
+        for o in self.ctx.orders.query(statuses=["접수", "출고대기"], due_to=until):
+            if o.stock_deducted:
+                continue
+            for k, v in requirements(o, pmap).items():
+                total[k] = round(total.get(k, 0) + v, 3)
+        items = {i.item_id: i for i in self.list_items()}
+        out = []
+        for code, need in total.items():
+            it = items.get(code)
+            stock = it.stock if it else 0
+            out.append(NeedOut(
+                item_id=code, name=it.name if it else f"{code} (자재 탭에 없음)", category=it.category if it else "기타",
+                unit=it.unit if it else "", need=need, stock=stock, short=round(max(0.0, need - stock), 3),
+            ))
+        cat = {c: i for i, c in enumerate(CATEGORY_ORDER)}
+        return sorted(out, key=lambda n: (n.short <= 0, cat.get(n.category, 99), n.name))
+
+    def apply(self, changes: dict[str, float], *, reason: str, order_id: str = "") -> list[str]:
         """재고 더하기/빼기. 없는 자재코드 목록을 돌려준다."""
         with self.ctx.sheets.lock:
             current = {d["item_id"]: d for d in self.items.rows(fresh=True) if d.get("item_id")}
@@ -217,7 +302,7 @@ class InventoryService:
                 if item_id not in current or delta == 0:
                     continue
                 d = current[item_id]
-                after = (d.get("stock") or 0) + delta  # 음수 허용: 실제보다 적게 적혀 있었다는 신호
+                after = round((d.get("stock") or 0) + delta, 3)  # 음수 허용: 실제보다 적게 적혀 있었다는 신호
                 updates.append(((item_id,), {"stock": after, "updated_at": ts}))
                 moves.append({
                     "ts": ts, "item_id": item_id, "item_name": d.get("name", ""), "change": delta,
@@ -229,7 +314,7 @@ class InventoryService:
             self.ctx.logs.write("자재코드 없음", ",".join(missing), f"{reason} {order_id}", actor="시스템", result="확인필요")
         return missing
 
-    def _move(self, item_id: str, name: str, change: int, after: int, reason: str, order_id: str) -> None:
+    def _move(self, item_id: str, name: str, change: float, after: float, reason: str, order_id: str) -> None:
         self.moves.insert({"ts": now(), "item_id": item_id, "item_name": name, "change": change,
                            "stock_after": after, "reason": reason, "order_id": order_id})
 
@@ -246,7 +331,7 @@ class InventoryService:
         raise NotFoundError("자재를 찾을 수 없어요.")
 
     # ---------------------------------------------------------------- 주문 연동
-    def deduct(self, order: OrderOut) -> dict[str, int]:
+    def deduct(self, order: OrderOut) -> dict[str, float]:
         if order.stock_deducted:
             return {}
         need = requirements(order, self.ctx.products.map())
@@ -256,7 +341,7 @@ class InventoryService:
         self.ctx.orders.set_fields(order.order_id, {"stock_deducted": True}, publish=None)
         return need
 
-    def restore(self, order: OrderOut, reason: str) -> dict[str, int]:
+    def restore(self, order: OrderOut, reason: str) -> dict[str, float]:
         if not order.stock_deducted:
             return {}
         need = requirements(order, self.ctx.products.map())
@@ -299,11 +384,11 @@ class InventoryService:
 
     @staticmethod
     def _line(i: ItemOut) -> str:
-        s = f"· {i.name} {i.stock:,}{i.unit} (안전 {i.safety_stock:,})"
+        s = f"· {i.name} {fmt_qty(i.stock)}{i.unit} (안전 {fmt_qty(i.safety_stock)})"
         if i.days_left is not None:
             s += f" · 약 {i.days_left:g}일분"
         if i.reorder_qty:
-            s += f" → {i.reorder_qty:,}{i.unit} 발주"
+            s += f" → {fmt_qty(i.reorder_qty)}{i.unit} {'보충' if i.category == '저장고' else '발주'}"
         if i.supplier:
             s += f" [{i.supplier}]"
         return s
