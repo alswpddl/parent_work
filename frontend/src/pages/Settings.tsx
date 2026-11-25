@@ -11,6 +11,7 @@ import {
   getSystemStatus,
   listInventory,
   googleCheck,
+  resetWebPassword,
   issueOrderLink,
   kakaoDisconnect,
   kakaoLoginUrl,
@@ -28,7 +29,7 @@ import {
 } from "../api/endpoints";
 import type { AppSettings, Customer, Product, SystemStatus } from "../api/types";
 import { useToast } from "../components/Toast";
-import { Alert, Badge, Button, Card, ConfirmButton, CopyButton, Empty, Field, Input, LoadState, Modal, PageHeader, Segmented, Select, Toggle } from "../components/ui";
+import { Alert, Badge, Button, Card, ConfirmButton, CopyButton, Empty, Field, Input, LoadState, Modal, PageHeader, Segmented, Select, Textarea, Toggle } from "../components/ui";
 import { useFeatures } from "../lib/features";
 import { dateKo, num, won } from "../lib/format";
 import { useAction, useAsync } from "../lib/hooks";
@@ -142,7 +143,10 @@ function BasicTab() {
           </div>
           <Toggle checked={v.shop_enabled} onChange={(x) => set({ shop_enabled: x })} label="웹 주문 받기 (끄면 주문서가 닫혀요)" />
           <Toggle checked={v.shop_show_prices} onChange={(x) => set({ shop_show_prices: x })} label="주문서에 가격 보이기" />
-          {text("shop_notice", "주문서 맨 위 안내 문구", "예) 오후 2시 전 주문은 다음 날 출고 · 입금 확인 후 발송")}
+          <Field label="공장 소개 (주문서 첫 화면)" hint="두세 줄이면 충분해요. 줄바꿈 그대로 보여요.">
+            <Textarea rows={3} value={v.shop_intro} placeholder={"예) 통영에서 30년,\n국산 새우로 직접 담급니다."} onChange={(e) => set({ shop_intro: e.target.value })} />
+          </Field>
+          {text("shop_notice", "주문서 공지 (노란 칸)", "예) 오후 2시 전 주문은 다음 날 출고 · 입금 확인 후 발송")}
           {text("privacy_retention", "개인정보 보관 기간", "주문서 동의 문구에 그대로 나와요")}
           <div className="grid gap-x-3 md:grid-cols-2">
             {number("shop_shipping_fee", "택배비 (원)", "0 이면 '택배비는 확인 후 안내'로 보여요")}
@@ -216,6 +220,7 @@ function CustomersTab() {
             </button>
             <div className="flex flex-wrap gap-1">
               {c.default_method !== "자동" && <Badge tone={c.default_method === "화물" ? "truck" : "parcel"}>항상 {c.default_method}</Badge>}
+              {c.has_web_account && <Badge tone="violet">웹 가입</Badge>}
               {!c.active && <Badge>숨김</Badge>}
             </div>
           </div>
@@ -266,6 +271,35 @@ function CustomersTab() {
   );
 }
 
+/** 손님이 웹 주문서 비밀번호를 잊었을 때 */
+function WebAccountReset({ customerId }: { customerId: string }) {
+  const toast = useToast();
+  const [done, setDone] = useState(false);
+  return (
+    <div className="mb-3 rounded-xl border-2 border-line bg-white px-4 py-3">
+      <div className="font-bold">웹 주문서 가입 손님</div>
+      <p className="mb-2 text-sm text-stone-500">비밀번호를 잊었다고 하면 초기화해 주세요. 손님이 같은 번호로 다시 가입하면 돼요 (주문 내역은 그대로).</p>
+      <ConfirmButton
+        size="sm"
+        variant="ghost"
+        disabled={done}
+        confirmText="비밀번호를 지울까요?"
+        onConfirm={async () => {
+          try {
+            await resetWebPassword(customerId);
+            setDone(true);
+            toast("비밀번호를 초기화했어요.");
+          } catch (e) {
+            toast(errorMessage(e), "error");
+          }
+        }}
+      >
+        {done ? "초기화했어요" : "비밀번호 초기화"}
+      </ConfirmButton>
+    </div>
+  );
+}
+
 function CustomerModal({ value, busy, onClose, onSave }: { value: Partial<Customer>; busy: boolean; onClose: () => void; onSave: (v: Partial<Customer>) => void }) {
   const { has } = useFeatures();
   const [v, setV] = useState(value);
@@ -304,6 +338,7 @@ function CustomerModal({ value, busy, onClose, onSave }: { value: Partial<Custom
         {has("q4_settlement") && inp("owner_name", "대표자")}
       </div>
       {inp("memo", "메모")}
+      {v.has_web_account && v.customer_id && <WebAccountReset customerId={v.customer_id} />}
       {has("q3_notify") && <Toggle checked={v.notify_opt_in !== false} onChange={(x) => set({ notify_opt_in: x })} label="출고 알림톡 받기" />}
       {v.customer_id && <Toggle checked={v.active !== false} onChange={(x) => set({ active: x })} label="사용 중 (끄면 목록에서 숨김)" />}
     </Modal>
@@ -466,6 +501,7 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
       {has("q2_web_order") && (
         <>
           {inp("description", "주문서 설명 (한 줄)", "웹 주문서 품목 아래에 보여요. 예) 김장용 추젓")}
+          {inp("image_url", "사진 주소 (선택)", "https:// 로 시작하는 사진 링크. 비우면 그림으로 보여요")}
           <Toggle checked={v.shop_visible !== false} onChange={(x) => set({ shop_visible: x })} label="웹 주문서에 보이기" />
           <Toggle checked={!!v.sold_out} onChange={(x) => set({ sold_out: x })} label="품절 (주문서에 '품절'로 보이고 주문은 안 받아요)" />
         </>

@@ -209,3 +209,23 @@ def test_status_shows_google_info_without_secrets(client):
     assert st["google"]["connected"] is False and "private_key" not in str(st)
     r = client.post("/api/system/google/check").json()
     assert r["ok"] is False and "메모리" in r["message"]
+
+
+def test_shop_account_http_flow(client):
+    public = TestClient(client.app)
+    body = {"name": "김영희", "phone": "010-7777-8888", "password": "1234", "agree_privacy": True}
+    r = public.post("/api/public/shop/auth/signup", json=body)
+    assert r.status_code == 201, r.text
+    tok = r.json()["token"]
+    assert public.get("/api/public/shop/me").status_code == 401
+    h = {"X-Shop-Token": tok}
+    assert public.get("/api/public/shop/me", headers=h).json()["name"] == "김영희"
+    o = public.post("/api/public/shop/orders", headers=h, json={
+        "name": "김영희", "phone": "010-7777-8888", "address": "서울시 마포구 1",
+        "items": [{"sku": "SES-18L", "qty": 1}], "agree_privacy": True,
+    })
+    assert o.status_code == 201
+    assert public.get("/api/public/shop/me/orders", headers=h).json()[0]["order_id"] == o.json()["order_id"]
+    cid = next(c["customer_id"] for c in client.get("/api/customers").json() if c["phone"] == "010-7777-8888")
+    assert client.post(f"/api/customers/{cid}/reset-web-password").json()["has_web_account"] is False
+    assert public.get("/api/public/shop/me", headers=h).status_code == 401

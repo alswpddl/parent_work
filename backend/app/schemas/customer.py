@@ -62,6 +62,7 @@ class CustomerOut(CustomerBase):
     customer_id: str
     active: bool = True
     has_order_link: bool = False
+    has_web_account: bool = False  # 웹 주문서 로그인 비밀번호를 만들었는지
     last_order_date: date | None = None
     avg_interval_days: float | None = None
     reorder_snooze_until: date | None = None
@@ -85,6 +86,7 @@ class CustomerOut(CustomerBase):
             owner_name=d.get("owner_name") or "",
             email=d.get("email") or "",
             has_order_link=bool(d.get("order_token")),
+            has_web_account=bool(d.get("web_password")),
             last_order_date=d.get("last_order_date"),
             avg_interval_days=d.get("avg_interval_days"),
             reorder_snooze_until=d.get("reorder_snooze_until"),

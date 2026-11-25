@@ -18,7 +18,7 @@ import Settings from "./pages/Settings";
 import Settlements from "./pages/Settlements";
 import Shipping from "./pages/Shipping";
 import SelfOrder from "./pages/public/SelfOrder";
-import Shop from "./pages/public/Shop";
+import ShopApp from "./pages/shop/ShopApp";
 import Today from "./pages/Today";
 
 export default function App() {
@@ -28,7 +28,7 @@ export default function App() {
     return (
       <Routes>
         <Route path="/order/:token" element={<SelfOrder />} />
-        <Route path="/shop/*" element={<Shop />} />
+        <Route path="/shop/*" element={<ShopApp />} />
       </Routes>
     );
   }

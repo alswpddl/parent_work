@@ -29,13 +29,14 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from ...core.errors import NotFoundError, TooManyRequests, ValidationFailed
+from ...core.errors import NotFoundError, TooManyRequests, UnauthorizedError, ValidationFailed
 from ...core.ids import next_seq_id
 from ...core.timeutil import fmt_date_ko, now, today
 from ...schemas.customer import CustomerOut
 from ...schemas.order import OrderCreate, OrderItemIn, OrderOut
 from ...schemas.settings import WEEKDAYS_KO, AppSettings, closed_weekdays
 from ..q2_self_order.service import PublicOrderOut, to_public
+from .accounts import check_password, hash_password, issue_token, read_token, token_matches
 
 MOBILE_RE = re.compile(r"^01[016789]\d{7,8}$")
 
@@ -76,12 +77,14 @@ class ShopProduct(BaseModel):
     price: int | None  # 가격 숨김 설정이면 None
     description: str
     sold_out: bool = False
+    image_url: str = ""
 
 
 class ShopInfo(BaseModel):
     factory_name: str
     factory_phone: str
     notice: str
+    intro: str = ""
     show_prices: bool
     bank_account: str
     min_due_date: date
@@ -106,6 +109,7 @@ class GuestOrderIn(BaseModel):
     agree_privacy: bool
     website: str = Field(default="", max_length=200, description="숨김 칸 — 사람은 비워 둔다")
     client_token: str = Field(default="", max_length=64, description="같은 주문서의 중복 제출 막기")
+    password: str = Field(default="", max_length=40, description="적으면 다음부터 로그인해서 주문 (가입)")
 
     @field_validator("name", "company", "address", "zipcode", "note", "client_token", mode="before")
     @classmethod
@@ -125,6 +129,90 @@ class GuestOrderOut(BaseModel):
     shipping_note: str  # 택배비 안내 한 줄
     bank_account: str
     factory_phone: str
+    token: str = ""  # 주문하면서 가입했거나 로그인 상태면 로그인 토큰
+
+
+# ---------------------------------------------------------------- 손님 계정
+class SignupIn(BaseModel):
+    name: str = Field(min_length=1, max_length=30)
+    company: str = Field(default="", max_length=40)
+    phone: str = Field(min_length=9, max_length=20)
+    password: str = Field(min_length=4, max_length=40)
+    address: str = Field(default="", max_length=200)
+    zipcode: str = Field(default="", max_length=10)
+    agree_privacy: bool
+
+    @field_validator("name", "company", "address", "zipcode", mode="before")
+    @classmethod
+    def _strip(cls, v):
+        return (v or "").strip()
+
+
+class LoginIn(BaseModel):
+    phone: str = Field(min_length=9, max_length=20)
+    password: str = Field(min_length=1, max_length=40)
+
+
+class ProfileOut(BaseModel):
+    name: str
+    company: str
+    phone: str
+    address: str
+    zipcode: str
+
+
+class AuthOut(BaseModel):
+    token: str
+    profile: ProfileOut
+
+
+class ProfilePatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=30)
+    company: str | None = Field(default=None, max_length=40)
+    address: str | None = Field(default=None, max_length=200)
+    zipcode: str | None = Field(default=None, max_length=10)
+
+
+class PasswordIn(BaseModel):
+    old_password: str = Field(min_length=1, max_length=40)
+    new_password: str = Field(min_length=4, max_length=40)
+
+
+class MyLine(BaseModel):
+    sku: str
+    name: str
+    qty: int
+    amount: int | None
+
+
+class MyOrderOut(BaseModel):
+    order_id: str
+    created_at: str
+    status: str
+    due_date: str
+    ship_method: str
+    lines: list[MyLine]
+    subtotal: int | None
+    shipping_fee: int
+    total: int | None
+    paid: bool
+    recipient: str
+    address: str
+    carrier: str
+    tracking_no: str
+    truck_no: str
+
+
+def _profile(c: CustomerOut) -> ProfileOut:
+    if c.type == "B2B":
+        return ProfileOut(name=c.contact_name or c.name, company=c.name, phone=c.phone, address=c.address, zipcode=c.zipcode)
+    return ProfileOut(name=c.contact_name or c.name, company="", phone=c.phone, address=c.address, zipcode=c.zipcode)
+
+
+def _attachable(c: CustomerOut) -> bool:
+    """손님이 스스로 비밀번호를 걸 수 있는 거래처: 개인 고객이거나 웹 주문서로 생긴 거래처.
+    부모님이 등록한 거래처는 번호만 알면 남이 가입해 주문 내역을 볼 수 있으므로 막는다."""
+    return c.type == "B2C" or "웹 주문서" in c.memo
 
 
 class _Limiter:
@@ -179,6 +267,8 @@ class WebOrderService:
         self.phone_limiter = _Limiter(3, 3600, "같은 번호로 주문이 너무 많이 들어왔어요. 전화로 문의해 주세요.")
         self.ip_limiter = _Limiter(10, 3600, "주문이 너무 많이 들어왔어요. 잠시 뒤 다시 해 주세요.")
         self.lookup_limiter = _Limiter(30, 600, "조회가 너무 많아요. 잠시 뒤 다시 해 주세요.")
+        self.login_phone_limiter = _Limiter(10, 3600, "비밀번호를 너무 많이 틀렸어요. 1시간 뒤 다시 해 주시거나 전화 주세요.")
+        self.login_ip_limiter = _Limiter(30, 3600, "로그인 시도가 너무 많아요. 잠시 뒤 다시 해 주세요.")
         self._done: dict[str, tuple[float, GuestOrderOut]] = {}  # client_token → 결과
         self._place_lock = threading.Lock()
 
@@ -198,6 +288,7 @@ class WebOrderService:
             factory_name=st.factory_name or "주문서",
             factory_phone=st.factory_phone,
             notice=st.shop_notice,
+            intro=st.shop_intro,
             show_prices=st.shop_show_prices,
             bank_account=st.bank_account,
             min_due_date=self._min_due(st),
@@ -213,7 +304,7 @@ class WebOrderService:
                 ShopProduct(
                     sku=p.sku, name=p.name, spec=p.spec, unit=p.unit, unit_kg=p.unit_kg,
                     price=p.shop_price if st.shop_show_prices else None, description=p.description,
-                    sold_out=p.sold_out,
+                    sold_out=p.sold_out, image_url=p.image_url,
                 )
                 for p in sorted(self._visible_products(), key=lambda p: (p.sold_out, p.name, p.unit_kg))
             ],
@@ -298,10 +389,13 @@ class WebOrderService:
         hit = self._done.get(token)
         return hit[1] if hit else None
 
-    def place(self, body: GuestOrderIn, client_ip: str = "") -> GuestOrderOut:
+    def place(self, body: GuestOrderIn, client_ip: str = "", token: str = "") -> GuestOrderOut:
         st = self.ctx.settings.load()
         self._validate(body, st)
         phone_d = digits(body.phone)
+        member = self.member(token) if token else None
+        if body.password and not member and len(body.password) < 4:
+            raise ValidationFailed("비밀번호는 4자리 이상으로 만들어 주세요.")
 
         # 같은 주문서가 두 번 들어오면(두 번 누름·느린 인터넷 재시도) 처음 결과를 그대로 돌려준다
         with self._place_lock:
@@ -313,7 +407,13 @@ class WebOrderService:
                 self.ip_limiter.check(client_ip)
 
             phone = pretty_phone(phone_d)
-            customer = self._find_or_create_customer(body, phone)
+            new_token = ""
+            if member:
+                customer = member  # 로그인 손님: 받는 분·주소가 달라도(선물) 내 주문으로
+            else:
+                customer = self._find_or_create_customer(body, phone)
+                if body.password:
+                    new_token = self._set_first_password(customer, body.password)
             # 택배비는 상품 금액·출고방식이 정해져야 알 수 있어 먼저 견적을 낸다
             pmap = self.ctx.products.map()
             subtotal: int | None = 0
@@ -363,10 +463,149 @@ class WebOrderService:
                 shipping_note=note if show else "금액은 확인 후 안내드려요.",
                 bank_account=st.bank_account,
                 factory_phone=st.factory_phone,
+                token=new_token or (token if member else ""),
             )
             if body.client_token:
                 self._done[body.client_token] = (time.monotonic(), out)
             return out
+
+    # ---------------------------------------------------------------- 손님 계정
+    @property
+    def _secret(self) -> str:
+        return self.ctx.config.auth_secret
+
+    def _rows_by_phone(self, phone: str) -> list[dict]:
+        target = digits(phone)
+        return [
+            d for d in self.ctx.customers.rows(fresh=True)
+            if d.get("customer_id") and digits(d.get("phone", "")) == target and d.get("active") is not False
+        ]
+
+    def _set_first_password(self, c: CustomerOut, password: str) -> str:
+        """주문하면서 가입: 비밀번호가 아직 없고 손님이 걸 수 있는 거래처일 때만. 토큰 또는 ''."""
+        row = self.ctx.customers.get(c.customer_id, fresh=True) or {}
+        if row.get("web_password") or not _attachable(c):
+            return ""
+        h = hash_password(password)
+        self.ctx.customers.update((c.customer_id,), {"web_password": h})
+        self.ctx.logs.write("웹 가입", c.customer_id, c.name, actor="웹주문서")
+        return issue_token(self._secret, c.customer_id, h)
+
+    def member(self, token: str) -> CustomerOut:
+        """로그인 토큰 → 거래처. 만료·비밀번호 변경·초기화면 다시 로그인하라고 알린다."""
+        got = read_token(self._secret, token)
+        row = self.ctx.customers.get(got[0], fresh=True) if got else None
+        if not got or not row or row.get("active") is False or not token_matches(got[1], row.get("web_password") or ""):
+            raise UnauthorizedError("다시 로그인해 주세요.")
+        return CustomerOut.from_row(row)
+
+    def signup(self, body: SignupIn) -> AuthOut:
+        if not body.agree_privacy:
+            raise ValidationFailed("개인정보 수집·이용에 동의해 주셔야 가입할 수 있어요.")
+        if not MOBILE_RE.match(digits(body.phone)):
+            raise ValidationFailed("휴대폰 번호를 확인해 주세요 (예: 010-1234-5678).")
+        phone = pretty_phone(body.phone)
+        rows = self._rows_by_phone(phone)
+        if any(r.get("web_password") for r in rows):
+            raise ValidationFailed("이미 가입된 번호예요. 로그인해 주세요. 비밀번호를 잊었으면 전화 주세요.")
+        # 이름 비교·새 거래처 만들기에 쓰는 임시 값 (검사 없이 만든다)
+        probe = GuestOrderIn.model_construct(
+            name=body.name, company=body.company, phone=phone, address=body.address, zipcode=body.zipcode,
+        )
+        same = [CustomerOut.from_row(r) for r in rows]
+        found = next((x for x in same if _attachable(x) and self._same_person(x, probe)), None)
+        if found is None:
+            c = self._new_customer(probe, phone, same)
+        else:
+            c = found
+            if body.address:
+                self.ctx.customers.update((c.customer_id,), {"address": body.address, "zipcode": body.zipcode})
+        h = hash_password(body.password)
+        self.ctx.customers.update((c.customer_id,), {"web_password": h, "privacy_agreed_at": now()})
+        self.ctx.logs.write("웹 가입", c.customer_id, c.name, actor="웹주문서")
+        fresh = CustomerOut.from_row(self.ctx.customers.get(c.customer_id, fresh=True) or {})
+        return AuthOut(token=issue_token(self._secret, c.customer_id, h), profile=_profile(fresh))
+
+    def _new_customer(self, body: GuestOrderIn, phone: str, same: list[CustomerOut]) -> CustomerOut:
+        existing = [d.get("customer_id") or "" for d in self.ctx.customers.rows()]
+        cid = next_seq_id(existing, "C")
+        memo = "웹 주문서로 가입"
+        if same:
+            memo += f" · 확인 필요: 번호가 {', '.join(c.name for c in same)}({', '.join(c.customer_id for c in same)})와 같아요"
+        row = {
+            "customer_id": cid, "name": body.company or body.name, "aliases": body.name if body.company else "",
+            "type": "B2B" if body.company else "B2C", "contact_name": body.name, "phone": phone,
+            "address": body.address, "zipcode": body.zipcode, "default_method": "자동", "notify_opt_in": True,
+            "privacy_agreed_at": now(), "memo": memo, "active": True,
+        }
+        self.ctx.customers.insert(row)
+        return CustomerOut.from_row(row)
+
+    def login(self, body: LoginIn, client_ip: str = "") -> AuthOut:
+        key = digits(body.phone)
+        self.login_phone_limiter.check(key)
+        if client_ip:
+            self.login_ip_limiter.check(client_ip)
+        for r in self._rows_by_phone(body.phone):
+            h = r.get("web_password") or ""
+            if h and check_password(body.password, h):
+                return AuthOut(token=issue_token(self._secret, r["customer_id"], h), profile=_profile(CustomerOut.from_row(r)))
+        self.login_phone_limiter.hit(key)
+        if client_ip:
+            self.login_ip_limiter.hit(client_ip)
+        raise ValidationFailed("휴대폰 번호나 비밀번호가 맞지 않아요.")
+
+    def me(self, token: str) -> ProfileOut:
+        return _profile(self.member(token))
+
+    def update_me(self, token: str, body: ProfilePatch) -> ProfileOut:
+        c = self.member(token)
+        ch: dict[str, Any] = {}
+        if body.name is not None:
+            ch["contact_name"] = body.name.strip()
+            if c.type == "B2C":
+                ch["name"] = body.name.strip()
+        if body.company is not None and body.company.strip() and c.type == "B2B":
+            ch["name"] = body.company.strip()
+        if body.address is not None:
+            ch["address"] = body.address.strip()
+        if body.zipcode is not None:
+            ch["zipcode"] = digits(body.zipcode)
+        if ch:
+            self.ctx.customers.update((c.customer_id,), ch)
+            self.ctx.logs.write("웹 정보 수정", c.customer_id, ", ".join(ch), actor="웹주문서")
+        return _profile(CustomerOut.from_row(self.ctx.customers.get(c.customer_id, fresh=True) or {}))
+
+    def change_password(self, token: str, body: PasswordIn) -> AuthOut:
+        c = self.member(token)
+        row = self.ctx.customers.get(c.customer_id, fresh=True) or {}
+        if not check_password(body.old_password, row.get("web_password") or ""):
+            raise ValidationFailed("지금 비밀번호가 맞지 않아요.")
+        h = hash_password(body.new_password)
+        self.ctx.customers.update((c.customer_id,), {"web_password": h})
+        return AuthOut(token=issue_token(self._secret, c.customer_id, h), profile=_profile(c))
+
+    def my_orders(self, token: str) -> list[MyOrderOut]:
+        c = self.member(token)
+        orders = self.ctx.orders.query(customer_id=c.customer_id, include_cancelled=True)
+        orders.sort(key=lambda o: o.created_at.isoformat() if o.created_at else "", reverse=True)
+        out = []
+        for o in orders[:50]:
+            out.append(MyOrderOut(
+                order_id=o.order_id,
+                created_at=o.created_at.strftime("%Y.%m.%d %H:%M") if o.created_at else "",
+                status=o.status,
+                due_date=fmt_date_ko(o.due_date) if o.due_date else "가장 빠른 날",
+                ship_method=o.ship_method,
+                lines=[MyLine(sku=l.sku, name=l.product_name, qty=l.qty, amount=l.amount) for l in o.lines],
+                subtotal=o.total_amount,
+                shipping_fee=o.shipping_fee,
+                total=o.total_amount + o.shipping_fee if o.total_amount is not None else None,
+                paid=o.paid_at is not None,
+                recipient=o.recipient, address=o.address,
+                carrier=o.carrier, tracking_no=o.tracking_no, truck_no=o.truck_no,
+            ))
+        return out
 
     # ---------------------------------------------------------------- 조회
     def lookup(self, order_id: str, phone_tail: str, client_ip: str = "") -> PublicOrderOut:
