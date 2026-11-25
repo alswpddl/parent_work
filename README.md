@@ -18,16 +18,19 @@
 
 ## 1. Codespaces 에서 바로 실행 (구글·카카오 연결 전, 예시 데이터)
 
-1. GitHub 저장소 → **Code → Codespaces → Create codespace** (Python·Node·패키지 자동 설치)
-2. 터미널 두 개:
-   ```bash
-   # 터미널 1 — 백엔드
-   cd backend && uvicorn app.main:app --reload --port 8000
-   # 터미널 2 — 프론트
-   cd frontend && npm install && npm run dev
-   ```
-3. 포트 5173 을 열면 화면이 나와요. `SHEETS_BACKEND=memory` 에서는 예시 품목·거래처·지난 두 달 주문이 들어 있고,
-   서버를 끄면 사라져요. API 문서는 포트 8000 의 `/docs`.
+브라우저만 있으면 돼요. 터미널에 아무것도 칠 필요 없어요.
+
+1. GitHub 저장소 → 초록 **Code** 버튼 → **Codespaces** 탭 → **Create codespace on main**
+2. 처음엔 3~5분 정도 설치가 돌아가요. 끝나면 서버 두 개(API·화면)가 **자동으로 켜지고**
+   화면 탭이 새로 열려요. 안 열리면 아래 **포트(PORTS)** 탭 → `5173 화면` 줄의 🌐 아이콘을 누르세요.
+3. 둘러볼 주소 (화면 주소 뒤에 붙이기)
+   - `/` 부모님 관리 화면 (예시 데이터라 로그인 없이 열림)
+   - `/today` 오늘의 할당량
+   - `/shop` 고객 웹 주문서
+4. 다 봤으면 GitHub → 오른쪽 위 프로필 → **Your codespaces** → `…` → **Stop codespace** (무료 시간 아끼기)
+
+메모리 모드(`SHEETS_BACKEND=memory`)라 예시 품목·거래처·지난 두 달 주문이 들어 있고, 서버가 꺼지면 넣은 주문은 사라져요.
+API 문서는 포트 8000 의 `/docs`.
 
 테스트:
 ```bash

@@ -7,6 +7,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // Codespaces 는 https://…-5173.app.github.dev 주소로 들어오므로 그 주소를 허용
+    allowedHosts: [".app.github.dev", "localhost"],
     proxy: {
       "/api": { target: "http://localhost:8000", changeOrigin: true },
     },
