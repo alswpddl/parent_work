@@ -8,6 +8,7 @@ Render / Codespaces 어디서든 환경변수로 주입하는 것을 기본으�
 from __future__ import annotations
 
 import json
+import re
 import os
 from pathlib import Path
 from typing import Literal
@@ -29,6 +30,14 @@ def _bool(v: str | None, default: bool) -> bool:
     if v is None or v == "":
         return default
     return v.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def sheet_id(v: str | None) -> str:
+    """시트 주소 전체를 붙여넣어도 ID 만 뽑는다.
+    https://docs.google.com/spreadsheets/d/<ID>/edit#gid=0 → <ID>"""
+    v = (v or "").strip()
+    m = re.search(r"/spreadsheets/d/([A-Za-z0-9_-]+)", v)
+    return m.group(1) if m else v
 
 
 def _list(v: str | None, default: list[str]) -> list[str]:
@@ -153,10 +162,16 @@ class AppConfig(BaseModel):
         sa_info: dict | None = None
         raw_json = env.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
         sa_file = env.get("GOOGLE_SERVICE_ACCOUNT_FILE", "").strip()
-        if raw_json:
-            sa_info = json.loads(raw_json)
-        elif sa_file:
-            sa_info = json.loads(Path(sa_file).read_text(encoding="utf-8"))
+        try:
+            if raw_json:
+                sa_info = json.loads(raw_json)
+            elif sa_file:
+                sa_info = json.loads(Path(sa_file).read_text(encoding="utf-8"))
+        except (ValueError, OSError) as e:
+            raise RuntimeError(
+                "GOOGLE_SERVICE_ACCOUNT_JSON 을 읽지 못했어요. 내려받은 키 파일(.json) 내용을 "
+                "{ 부터 } 까지 빠짐없이 그대로 붙여넣었는지 확인해 주세요."
+            ) from e
 
         g = env.get
         return cls(
@@ -164,8 +179,8 @@ class AppConfig(BaseModel):
             public_web_url=g("PUBLIC_WEB_URL", "http://localhost:5173"),
             public_api_url=g("PUBLIC_API_URL", "http://localhost:8000"),
             sheets_backend=g("SHEETS_BACKEND", "memory"),  # type: ignore[arg-type]
-            spreadsheet_id=g("GOOGLE_SPREADSHEET_ID", ""),
-            system_spreadsheet_id=g("SYSTEM_SPREADSHEET_ID", ""),
+            spreadsheet_id=sheet_id(g("GOOGLE_SPREADSHEET_ID", "")),
+            system_spreadsheet_id=sheet_id(g("SYSTEM_SPREADSHEET_ID", "")),
             service_account_info=sa_info,
             sheets_cache_ttl=float(g("SHEETS_CACHE_TTL", "30")),
             auto_init_sheets=_bool(g("AUTO_INIT_SHEETS"), True),

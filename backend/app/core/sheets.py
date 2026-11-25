@@ -137,7 +137,18 @@ class GspreadBackend:
         self._gspread = gspread
         self._max_retries = max_retries
         gc = gspread.service_account_from_dict(service_account_info)
-        self._sh = self._call(gc.open_by_key, spreadsheet_id)
+        email = service_account_info.get("client_email", "(서비스 계정 이메일)")
+        try:
+            self._sh = gc.open_by_key(spreadsheet_id)
+        except Exception as e:  # SpreadsheetNotFound / APIError(403·404)
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status in self.RETRY_STATUS:
+                self._sh = self._call(gc.open_by_key, spreadsheet_id)
+            else:
+                raise RuntimeError(
+                    f"구글 시트({spreadsheet_id})를 열지 못했어요. ① 시트 ID 가 맞는지 ② 그 시트를 "
+                    f"{email} 에게 '편집자'로 공유했는지 ③ Google Sheets API 를 '사용'으로 켰는지 확인해 주세요."
+                ) from e
         self._sheet_ids: dict[str, int] = {}
 
     # --- 재시도 ---
