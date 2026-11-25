@@ -104,6 +104,9 @@ export interface Product {
   container_item: string;
   box_item: string;
   label_item: string;
+  lid_item: string;
+  bulk_item: string;
+  net_kg: number | null;
   active: boolean;
 }
 export type ProductInput = Omit<Product, "sku" | "active"> & { sku?: string | null };
@@ -386,6 +389,17 @@ export interface InventoryItem {
   days_left: number | null;
   order_by: string | null;
   used_by: string[];
+}
+
+/** 출고 전 주문들이 쓸 자재·저장고 젓갈 vs 지금 재고 */
+export interface StockNeed {
+  item_id: string;
+  name: string;
+  category: string;
+  unit: string;
+  need: number;
+  stock: number;
+  short: number;
 }
 
 export interface StockMove {

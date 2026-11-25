@@ -3,11 +3,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Circle, Globe, Printer, Truck } from "lucide-react";
-import { listOrders, updateOrder } from "../api/endpoints";
+import { listOrders, stockNeeds, updateOrder } from "../api/endpoints";
 import type { Order } from "../api/types";
 import { useToast } from "../components/Toast";
 import { Alert, Badge, Button, Card, Empty, LoadState, MethodBadge, PageHeader, Segmented, cx } from "../components/ui";
 import { dateKo, kg, num, todayIso } from "../lib/format";
+import { useFeatures } from "../lib/features";
 import { useAction, useAsync, useAutoRefresh } from "../lib/hooks";
 import { needsPayment } from "../lib/orders";
 
@@ -27,7 +28,12 @@ export default function Today() {
   const { busy, run } = useAction();
   const [range, setRange] = useState<Range>("today");
   const list = useAsync(() => listOrders({ status: "접수,출고대기" }), []);
-  useAutoRefresh(list.refresh);
+  const { has } = useFeatures();
+  const needs = useAsync(
+    () => (has("q4_inventory") ? stockNeeds(range === "today" ? todayIso() : range === "tomorrow" ? todayIso(1) : undefined) : Promise.resolve([])),
+    [range],
+  );
+  useAutoRefresh(() => Promise.all([list.refresh(), needs.refresh()]));
   const all = useMemo(() => list.data ?? [], [list.data]);
   const today = todayIso();
   const until = range === "today" ? today : range === "tomorrow" ? todayIso(1) : null;
@@ -127,6 +133,31 @@ export default function Today() {
               </div>
             )}
           </Card>
+
+          {(needs.data?.length ?? 0) > 0 && (
+            <Card
+              title="🫙 저장고·자재 확인"
+              actions={<Link to="/inventory" className="no-print"><Button size="sm" variant="ghost">재고 보기</Button></Link>}
+            >
+              {needs.data!.some((n) => n.short > 0) ? (
+                <Alert tone="error">모자라는 게 있어요. 미리 담그거나 주문해 주세요.</Alert>
+              ) : (
+                <p className="mb-2 text-brand-dark">이 주문들을 다 보내도 재고가 충분해요 ✔</p>
+              )}
+              <div className="divide-y divide-dashed divide-line">
+                {needs.data!.map((n) => (
+                  <div key={n.item_id} className="py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <b className="min-w-0 break-keep">{n.name}</b>
+                      {n.short > 0 ? <Badge tone="red">{num(n.short)}{n.unit} 부족</Badge> : <span className="text-sm text-stone-400">{n.category}</span>}
+                    </div>
+                    <div className="text-sm text-stone-600">필요 {num(n.need)}{n.unit} · 남음 {num(n.stock)}{n.unit}</div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-sm text-stone-500">출고하면 자동으로 빠져요. 받는 날이 안 정해진 주문도 포함해서 계산해요.</p>
+            </Card>
+          )}
 
           {orders.length > 0 && (
             <Card

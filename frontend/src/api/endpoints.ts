@@ -12,6 +12,7 @@ import type {
   GuestOrderInput,
   GuestOrderResult,
   InventoryItem,
+  StockNeed,
   KakaoStatus,
   MarketMapping,
   MarketPreview,
@@ -140,6 +141,9 @@ export const updateInventoryItem = (id: string, patch: Partial<InventoryItem>) =
 export const receiveStock = (id: string, qty: number, memo: string) => api<InventoryItem>(`/api/inventory/${id}/receive`, { body: { qty, memo } });
 export const adjustStock = (id: string, stock: number, reason: string) => api<InventoryItem>(`/api/inventory/${id}/adjust`, { body: { stock, reason } });
 export const stockMoves = (itemId?: string, limit = 100) => api<StockMove[]>("/api/inventory/moves", { query: { item_id: itemId, limit } });
+export const stockNeeds = (until?: string) => api<StockNeed[]>("/api/inventory/needs", { query: { until } });
+export const stocktake = (counts: Record<string, number>, reason: string) =>
+  api<{ changed: number; items: InventoryItem[] }>("/api/inventory/stocktake", { body: { counts, reason } });
 export const stockCheck = () => api<{ low: number; alerted: number; reason?: string }>("/api/inventory/check", { method: "POST" });
 
 export const listSettlements = (period?: string) => api<Settlement[]>("/api/settlements", { query: { period } });

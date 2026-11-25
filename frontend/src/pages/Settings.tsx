@@ -9,6 +9,7 @@ import {
   createProduct,
   getSettings,
   getSystemStatus,
+  listInventory,
   googleCheck,
   issueOrderLink,
   kakaoDisconnect,
@@ -29,7 +30,7 @@ import type { AppSettings, Customer, Product, SystemStatus } from "../api/types"
 import { useToast } from "../components/Toast";
 import { Alert, Badge, Button, Card, ConfirmButton, CopyButton, Empty, Field, Input, LoadState, Modal, PageHeader, Segmented, Select, Toggle } from "../components/ui";
 import { useFeatures } from "../lib/features";
-import { dateKo, won } from "../lib/format";
+import { dateKo, num, won } from "../lib/format";
 import { useAction, useAsync } from "../lib/hooks";
 
 type Tab = "basic" | "customers" | "products" | "kakao" | "system";
@@ -310,7 +311,7 @@ function CustomerModal({ value, busy, onClose, onSave }: { value: Partial<Custom
 }
 
 // ================================================================ 품목
-const EMPTY_PRODUCT: Partial<Product> = { name: "", spec: "", aliases: "", description: "", shop_visible: true, sold_out: false, unit: "통", unit_kg: 0, units_per_box: null, unit_price: null, retail_price: null, tax_type: "", container_item: "", box_item: "", label_item: "" };
+const EMPTY_PRODUCT: Partial<Product> = { name: "", spec: "", aliases: "", description: "", shop_visible: true, sold_out: false, unit: "통", unit_kg: 0, units_per_box: null, unit_price: null, retail_price: null, tax_type: "", container_item: "", box_item: "", label_item: "", lid_item: "", bulk_item: "", net_kg: null };
 
 function ProductsTab() {
   const toast = useToast();
@@ -337,7 +338,7 @@ function ProductsTab() {
           <div className="text-sm text-stone-500">
             1{p.unit} {p.unit_kg}kg{p.units_per_box ? ` · 박스당 ${p.units_per_box}${p.unit}` : ""}{p.unit_price !== null ? ` · ${won(p.unit_price)}` : " · 단가 없음"}
             {has("q2_web_order") && p.retail_price !== null && ` · 개인 ${won(p.retail_price)}`}
-            {has("q4_inventory") && (p.container_item || p.box_item || p.label_item) && ` · 자재 ${[p.container_item, p.box_item, p.label_item].filter(Boolean).join("/")}`}
+            {has("q4_inventory") && (p.bulk_item || p.container_item || p.lid_item || p.label_item || p.box_item) && ` · 재고 ${[p.bulk_item, p.container_item, p.lid_item, p.label_item, p.box_item].filter(Boolean).join("/")}`}
           </div>
         </button>
         {has("q2_web_order") && p.active && (
@@ -387,6 +388,38 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
   const [v, setV] = useState(value);
   const set = (p: Partial<Product>) => setV({ ...v, ...p });
   const isNew = !value.sku;
+  const stock = useAsync(() => (has("q4_inventory") ? listInventory() : Promise.resolve([])), []);
+  // 규격 '1kg', '500g' 에서 내용량 읽기 (서버 규칙과 같음)
+  const specKg = (() => {
+    const m = /(\d+(?:\.\d+)?)\s*(kg|키로|킬로|g|그램)/i.exec(v.spec ?? "");
+    if (!m) return 0;
+    const n = Number(m[1]);
+    return /^(g|그램)$/i.test(m[2]) ? n / 1000 : n;
+  })();
+  const contentKg = v.net_kg || specKg;
+  const pick = (k: "bulk_item" | "container_item" | "lid_item" | "label_item" | "box_item", label: string, category: string, hint: string) => {
+    const cur = (v[k] as string) || "";
+    const opts = (stock.data ?? []).filter((i) => i.category === category || i.item_id === cur);
+    const others = (stock.data ?? []).filter((i) => i.category !== category && i.item_id !== cur);
+    return (
+      <Field label={label} hint={hint}>
+        <Select value={cur} onChange={(e) => set({ [k]: e.target.value } as Partial<Product>)}>
+          <option value="">— 안 씀 —</option>
+          {opts.map((i) => (
+            <option key={i.item_id} value={i.item_id}>{i.name} ({num(i.stock)}{i.unit})</option>
+          ))}
+          {others.length > 0 && (
+            <optgroup label="다른 분류">
+              {others.map((i) => (
+                <option key={i.item_id} value={i.item_id}>{i.category} · {i.name}</option>
+              ))}
+            </optgroup>
+          )}
+          {cur && !(stock.data ?? []).some((i) => i.item_id === cur) && <option value={cur}>{cur} (재고에 없는 코드)</option>}
+        </Select>
+      </Field>
+    );
+  };
   const inp = (k: keyof Product, label: string, hint?: string, type = "text") => (
     <Field label={label} hint={hint}>
       <Input type={type} inputMode={type === "number" ? "decimal" : undefined} value={v[k] === null || v[k] === undefined ? "" : String(v[k])} onChange={(e) => set({ [k]: e.target.value } as Partial<Product>)} />
@@ -416,11 +449,17 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
       </div>
       {has("q4_inventory") && (
         <>
-          <h3 className="mb-2 mt-2 font-extrabold">출고할 때 빠지는 자재 (자재코드)</h3>
-          <div className="grid gap-x-3 md:grid-cols-3">
-            {inp("container_item", "용기", "1개당 1")}
-            {inp("box_item", "박스", "박스당 1")}
-            {inp("label_item", "라벨", "1개당 1")}
+          <h3 className="mb-1 mt-2 font-extrabold">출고하면 자동으로 빠지는 재고</h3>
+          <p className="mb-2 text-sm text-stone-500">고른 재고가 출고 완료 때 알아서 줄어요. 목록에 없으면 [재고] 화면에서 먼저 추가해 주세요.</p>
+          <div className="grid gap-x-3 md:grid-cols-2">
+            {pick("bulk_item", "저장고 젓갈", "저장고", `1개당 ${contentKg ? `${contentKg}kg` : "내용량 kg"}`)}
+            <Field label="내용량 (kg)" hint={v.net_kg ? "직접 넣은 값" : contentKg ? `규격 '${v.spec}'에서 읽음: ${contentKg}kg — 다르면 넣어 주세요` : "규격에 kg·g가 없으면 꼭 넣어 주세요"}>
+              <Input type="number" inputMode="decimal" step="0.1" value={v.net_kg ?? ""} placeholder={contentKg ? String(contentKg) : ""} onChange={(e) => set({ net_kg: e.target.value === "" ? null : Number(e.target.value) })} />
+            </Field>
+            {pick("container_item", "통·말통", "용기", "1개당 1")}
+            {pick("lid_item", "뚜껑", "뚜껑", "1개당 1")}
+            {pick("label_item", "라벨", "라벨", "1개당 1")}
+            {pick("box_item", "박스", "박스", "박스입수마다 1")}
           </div>
         </>
       )}

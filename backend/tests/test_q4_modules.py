@@ -4,9 +4,11 @@ from datetime import timedelta
 
 import pytest
 
+from app.core.errors import ValidationFailed
+
 from app.core.signing import verify
 from app.core.timeutil import now, today
-from app.modules.q4_inventory.service import AdjustIn, ItemIn, ReceiveIn
+from app.modules.q4_inventory.service import AdjustIn, ItemIn, ReceiveIn, StocktakeIn
 from app.modules.q4_reorder.service import SnoozeIn
 from app.modules.q4_settlement.service import GenerateIn, SendIn, SettlementPatch, prev_period
 from app.schemas.order import OrderCreate, OrderItemIn
@@ -181,3 +183,53 @@ def test_reorder_reminders_and_snooze(full_ctx):
 
     svc.snooze("C0001", SnoozeIn(days=5))
     assert svc.reminders() == []
+
+
+# ---------------------------------------------------------------- 뚜껑·저장고(kg)
+def _bulk_setup(ctx):
+    inv = ctx.services["inventory"]
+    inv.create(ItemIn(item_id="LID-1", category="뚜껑", name="뚜껑", stock=100))
+    inv.create(ItemIn(item_id="BULK-CHI", category="저장고", name="고춧가루 저장고", unit="kg", stock=152.5, safety_stock=40))
+    ctx.products.update(("CHI-5KG",), {"lid_item": "LID-1", "bulk_item": "BULK-CHI"})  # 규격 5kg → 내용량 5
+    ctx.products.update(("CHI-10KG",), {"bulk_item": "BULK-CHI", "net_kg": 9.5})  # 내용량 직접 입력
+    return inv
+
+
+def test_lids_and_bulk_kg_are_deducted_on_ship(full_ctx):
+    inv = _bulk_setup(full_ctx)
+    o = _order(full_ctx, items=(("CHI-5KG", 3), ("CHI-10KG", 2)))
+    full_ctx.orders.ship(o.order_id)
+    assert _stock(full_ctx, "LID-1") == 97
+    assert _stock(full_ctx, "BULK-CHI") == pytest.approx(152.5 - 15 - 19)  # 5kg×3 + 9.5kg×2
+    full_ctx.orders.unship(o.order_id)
+    assert _stock(full_ctx, "BULK-CHI") == pytest.approx(152.5)
+    item = next(i for i in inv.list_items() if i.item_id == "BULK-CHI")
+    assert set(item.used_by) == {"고춧가루 5kg", "고춧가루 10kg"}
+
+
+def test_needs_compares_open_orders_with_stock(full_ctx):
+    inv = _bulk_setup(full_ctx)
+    _order(full_ctx, items=(("CHI-5KG", 30),))  # 150kg 필요 < 152.5
+    _order(full_ctx, items=(("CHI-10KG", 1),))  # +9.5kg → 159.5 > 152.5
+    needs = {n.item_id: n for n in inv.needs()}
+    assert needs["BULK-CHI"].need == pytest.approx(159.5) and needs["BULK-CHI"].short == pytest.approx(7)
+    assert needs["LID-1"].short == 0
+    assert list(needs)[0] == "BULK-CHI"  # 모자라는 것이 맨 위
+
+
+def test_stocktake_sets_many_counts_at_once(full_ctx):
+    inv = _bulk_setup(full_ctx)
+    r = inv.stocktake(StocktakeIn(counts={"BULK-CHI": 140.25, "LID-1": 100, "CT-18L": 0}, reason="월말 재고 조사"))
+    assert r.changed == 2  # 뚜껑은 그대로라 빠짐
+    assert _stock(full_ctx, "BULK-CHI") == pytest.approx(140.25) and _stock(full_ctx, "CT-18L") == 0
+    assert inv.recent_moves("BULK-CHI")[0].reason == "실사조정 · 월말 재고 조사"
+    with pytest.raises(ValidationFailed, match="없는 자재코드"):
+        inv.stocktake(StocktakeIn(counts={"NOPE": 1}))
+
+
+def test_content_kg_from_spec():
+    from app.schemas.product import ProductOut
+
+    assert ProductOut(sku="a", name="x", spec="500g").content_kg == 0.5
+    assert ProductOut(sku="a", name="x", spec="1.8L").content_kg == 0  # 리터는 무게가 아니라 직접 입력
+    assert ProductOut(sku="a", name="x", spec="1.8L", net_kg=1.65).content_kg == 1.65
