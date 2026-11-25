@@ -11,7 +11,7 @@ import { useToast } from "../components/Toast";
 import { Button, Card, CopyButton, Empty, LoadState, PageHeader, Segmented, Select } from "../components/ui";
 import { useFeatures } from "../lib/features";
 import { kg, todayIso } from "../lib/format";
-import { useAction, useAsync } from "../lib/hooks";
+import { useAction, useAsync, useAutoRefresh } from "../lib/hooks";
 
 type Tab = "parcel" | "truck" | "done";
 
@@ -22,6 +22,7 @@ export default function Shipping() {
   const [params, setParams] = useSearchParams();
   const tab = (params.get("tab") as Tab) || "parcel";
   const board = useAsync(getBoard, []);
+  useAutoRefresh(board.refresh);
   const formats = useAsync(listCarrierFormats, []);
   const carriers = useAsync(() => (has("q3_tracking") ? trackingCarriers() : Promise.resolve(["CJ대한통운", "로젠택배", "기타"])), []);
   const shippedToday = useAsync(() => (tab === "done" ? listOrders({ status: "출고완료" }).then((xs) => xs.filter((o) => (o.shipped_at ?? "").startsWith(todayIso()))) : Promise.resolve([])), [tab]);

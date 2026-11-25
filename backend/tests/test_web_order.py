@@ -7,7 +7,7 @@ import pytest
 from app.core.errors import NotFoundError, TooManyRequests, ValidationFailed
 from app.core.timeutil import today
 from app.modules.q2_web_order.service import GuestOrderIn
-from app.schemas.order import OrderItemIn
+from app.schemas.order import OrderCreate, OrderItemIn
 from app.schemas.settings import SettingsPatch
 
 
@@ -41,7 +41,8 @@ def test_shop_info_lists_visible_products_and_privacy(full_ctx):
 
 def test_new_guest_becomes_customer_and_order_is_saved(full_ctx, http):
     out = _svc(full_ctx).place(_body(note="문 앞에 두세요"), "1.2.3.4")
-    assert out.estimated_total == 2 * 38000 and out.bank_account.startswith("농협")
+    assert out.subtotal == 2 * 38000 and out.shipping_fee is None and out.estimated_total is None
+    assert "확인 후" in out.shipping_note and out.bank_account.startswith("농협")
     order = full_ctx.orders.get(out.order_id)
     assert order.source == "웹주문서" and order.recipient == "김영희" and order.phone == "010-7777-8888"
     assert order.ship_method == "택배" and order.note == "문 앞에 두세요"
@@ -56,13 +57,91 @@ def test_new_guest_becomes_customer_and_order_is_saved(full_ctx, http):
 def test_company_name_and_existing_customer_matching(full_ctx):
     out = _svc(full_ctx).place(_body(name="박실장", company="행복마트 본점", phone="01022223333"), "1.1.1.1")
     order = full_ctx.orders.get(out.order_id)
-    assert order.customer_id == "C0002"  # 같은 휴대폰 번호 → 기존 거래처로 연결
+    assert order.customer_id == "C0002"  # 같은 번호 + 이름이 맞음 → 기존 거래처로 연결
     assert order.ship_method == "화물"  # 행복마트 기본 출고방식
     assert len(full_ctx.customers.list()) == 2  # 새로 만들지 않음
 
     out = _svc(full_ctx).place(_body(name="최사장", company="새가게", phone="010-5555-1234"), "1.1.1.2")
     c = full_ctx.customers.by_id(full_ctx.orders.get(out.order_id).customer_id)
     assert c.name == "새가게" and c.contact_name == "최사장" and c.type == "B2B"
+
+
+def test_same_phone_but_different_name_is_not_linked(full_ctx):
+    """남의 거래처 번호를 적어도 그 거래처 월말 정산에 끼어들지 못한다."""
+    out = _svc(full_ctx).place(_body(name="모르는사람", phone="010-2222-3333"), "1.1.1.3")
+    order = full_ctx.orders.get(out.order_id)
+    assert order.customer_id not in ("C0001", "C0002")
+    c = full_ctx.customers.by_id(order.customer_id)
+    assert c.type == "B2C" and "확인 필요" in c.memo and "C0002" in c.memo
+
+
+def test_retail_price_and_shipping_fee(full_ctx):
+    full_ctx.products.update(("SES-18L",), {"retail_price": 42000})
+    full_ctx.settings.save(SettingsPatch(shop_shipping_fee=4000, shop_free_shipping_over=100000))
+    info = _svc(full_ctx).info()
+    assert next(p for p in info.products if p.sku == "SES-18L").price == 42000
+    assert info.shipping_fee == 4000 and info.free_shipping_over == 100000
+
+    out = _svc(full_ctx).place(_body(), "1.1.1.4")  # 42,000 × 2 = 84,000 → 택배비 4,000
+    assert (out.subtotal, out.shipping_fee, out.estimated_total) == (84000, 4000, 88000)
+    order = full_ctx.orders.get(out.order_id)
+    assert order.lines[0].unit_price == 42000 and order.shipping_fee == 4000  # 주문장에도 개인판매가로
+
+    out = _svc(full_ctx).place(_body(phone="010-1212-3434", items=[OrderItemIn(sku="SES-18L", qty=3)]), "1.1.1.4")
+    assert (out.shipping_fee, out.estimated_total, out.shipping_note) == (0, 126000, "택배비 무료")
+
+
+def test_truck_orders_get_no_parcel_fee(full_ctx):
+    full_ctx.settings.save(SettingsPatch(shop_shipping_fee=4000))
+    out = _svc(full_ctx).place(_body(items=[OrderItemIn(sku="SES-18L", qty=40)]), "1.1.1.5")  # 40 × 1.7kg ≥ 50kg
+    assert out.ship_method == "화물" and out.shipping_fee is None and "운임" in out.shipping_note
+    assert full_ctx.orders.get(out.order_id).shipping_fee == 0
+
+
+def test_sold_out_and_closed_days(full_ctx):
+    full_ctx.products.update(("PER-18L",), {"sold_out": True})
+    info = _svc(full_ctx).info()
+    assert info.products[-1].sku == "PER-18L" and info.products[-1].sold_out  # 품절은 맨 아래
+    with pytest.raises(ValidationFailed, match="품절"):
+        _svc(full_ctx).place(_body(items=[OrderItemIn(sku="PER-18L", qty=1)]))
+
+    assert info.closed_weekdays == [6] and info.min_due_date.weekday() != 6
+    d = today() + timedelta(days=2)
+    sunday = d + timedelta(days=(6 - d.weekday()) % 7)
+    with pytest.raises(ValidationFailed, match="일요일"):
+        _svc(full_ctx).place(_body(due_date=sunday))
+    full_ctx.settings.save(SettingsPatch(closed_days="없음"))
+    assert _svc(full_ctx).place(_body(due_date=sunday), "1.1.1.6").order_id
+
+
+def test_double_submit_creates_one_order(full_ctx):
+    s = _svc(full_ctx)
+    a = s.place(_body(client_token="tok-1"), "1.1.1.7")
+    b = s.place(_body(client_token="tok-1"), "1.1.1.7")
+    assert a.order_id == b.order_id
+    assert len([o for o in full_ctx.orders.query() if o.source == "웹주문서"]) == 1
+
+
+def test_paid_flag_and_settlement_skips_individuals(full_ctx):
+    from app.modules.q4_settlement.service import GenerateIn
+
+    guest = _svc(full_ctx).place(_body(), "1.1.1.8")  # 개인 고객
+    b2b = full_ctx.orders.create(OrderCreate(customer_id="C0001", items=[OrderItemIn(sku="SES-18L", qty=1)]))
+    prepaid = full_ctx.orders.create(OrderCreate(customer_id="C0001", items=[OrderItemIn(sku="SES-18L", qty=5)]))
+    o = full_ctx.orders.set_paid(prepaid.order_id, True)
+    assert o.paid_at is not None
+    assert _svc(full_ctx).lookup(guest.order_id, "8888", "9.9.9.1").paid is False
+    for oid in (guest.order_id, b2b.order_id, prepaid.order_id):
+        full_ctx.orders.ship(oid)
+    period = f"{today():%Y-%m}"
+    r = full_ctx.services["settlement"].generate(GenerateIn(period=period))
+    assert [(x.customer_id, x.order_count) for x in r.settlements] == [("C0001", 1)]
+    assert full_ctx.orders.set_paid(prepaid.order_id, False).paid_at is None
+
+
+def test_settings_accept_won_text(full_ctx):
+    full_ctx.settings.update(("shop_shipping_fee",), {"value": "3,500원"})
+    assert full_ctx.settings.load().shop_shipping_fee == 3500
 
 
 def test_validation_rules(full_ctx):

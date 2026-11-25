@@ -15,9 +15,11 @@ class ProductBase(BaseModel):
     unit_kg: float = Field(default=0, ge=0, le=2000)
     units_per_box: int | None = Field(default=None, ge=1, le=1000)
     unit_price: int | None = Field(default=None, ge=0)
-    # 웹 주문서: 고객에게 보이는 설명·노출 여부
+    # 웹 주문서: 개인 판매가(부가세 포함, 비우면 공급단가)·설명·노출·품절
+    retail_price: int | None = Field(default=None, ge=0)
     description: str = Field(default="", max_length=200)
     shop_visible: bool = True
+    sold_out: bool = False
     # 4분기: 세금·자재 매핑
     tax_type: TaxType = ""
     container_item: str = ""
@@ -43,8 +45,10 @@ class ProductPatch(BaseModel):
     units_per_box: int | None = Field(default=None, ge=1, le=1000)
     unit_price: int | None = Field(default=None, ge=0)
     active: bool | None = None
+    retail_price: int | None = Field(default=None, ge=0)
     description: str | None = Field(default=None, max_length=200)
     shop_visible: bool | None = None
+    sold_out: bool | None = None
     tax_type: TaxType | None = None
     container_item: str | None = None
     box_item: str | None = None
@@ -58,6 +62,11 @@ class ProductOut(ProductBase):
     @property
     def display_name(self) -> str:
         return f"{self.name} {self.spec}".strip()
+
+    @property
+    def shop_price(self) -> int | None:
+        """웹 주문서 가격: 개인판매가가 있으면 그것, 없으면 공급단가."""
+        return self.retail_price if self.retail_price is not None else self.unit_price
 
     @property
     def is_taxable(self) -> bool:
@@ -79,6 +88,8 @@ class ProductOut(ProductBase):
             active=d.get("active") is not False,
             description=d.get("description") or "",
             shop_visible=d.get("shop_visible") is not False,  # 빈칸이면 보이게
+            retail_price=d.get("retail_price") if (d.get("retail_price") or 0) > 0 else None,
+            sold_out=d.get("sold_out") is True,
             tax_type=tax if tax in ("과세", "면세") else "",  # type: ignore[arg-type]
             container_item=d.get("container_item") or "",
             box_item=d.get("box_item") or "",

@@ -8,7 +8,8 @@ import type { Order } from "../api/types";
 import { useToast } from "../components/Toast";
 import { Alert, Badge, Button, Card, Empty, LoadState, MethodBadge, PageHeader, Segmented, cx } from "../components/ui";
 import { dateKo, kg, num, todayIso } from "../lib/format";
-import { useAction, useAsync } from "../lib/hooks";
+import { useAction, useAsync, useAutoRefresh } from "../lib/hooks";
+import { needsPayment } from "../lib/orders";
 
 type Range = "today" | "tomorrow" | "all";
 
@@ -26,6 +27,7 @@ export default function Today() {
   const { busy, run } = useAction();
   const [range, setRange] = useState<Range>("today");
   const list = useAsync(() => listOrders({ status: "접수,출고대기" }), []);
+  useAutoRefresh(list.refresh);
   const all = useMemo(() => list.data ?? [], [list.data]);
   const today = todayIso();
   const until = range === "today" ? today : range === "tomorrow" ? todayIso(1) : null;
@@ -93,6 +95,11 @@ export default function Today() {
 
       {list.data && (
         <>
+          {orders.some(needsPayment) && (
+            <Alert tone="warn" action={<Link to="/orders"><Button size="sm" variant="ghost">주문 목록</Button></Link>}>
+              💰 입금 확인 안 된 웹 주문 {orders.filter(needsPayment).length}건 — 입금 확인 후 보내 주세요. (주문 목록에서 눌러 [입금 확인])
+            </Alert>
+          )}
           {range !== "all" && undated > 0 && (
             <Alert tone="info" action={<Button size="sm" variant="ghost" onClick={() => setRange("all")}>전부 보기</Button>}>
               받는 날이 안 정해진 주문 {undated}건은 '전부'에서 보여요.
@@ -155,6 +162,7 @@ export default function Today() {
                             <span className={cx("mr-1 text-lg font-extrabold", done && "line-through decoration-2 opacity-70")}>{o.customer_name}</span>
                             <MethodBadge method={o.ship_method} />
                             {o.source === "웹주문서" && <Badge tone="violet"><Globe className="mr-1 inline h-3.5 w-3.5" />웹 주문</Badge>}
+                            {needsPayment(o) && <Badge tone="amber">입금 전</Badge>}
                             {late && <Badge tone="red">늦음</Badge>}
                           </div>
                           <ul className="mt-2 space-y-0.5">

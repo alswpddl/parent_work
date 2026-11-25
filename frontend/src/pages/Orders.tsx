@@ -6,7 +6,7 @@ import type { Order } from "../api/types";
 import OrderCard from "../components/OrderCard";
 import OrderDetail from "../components/OrderDetail";
 import { Button, Empty, Input, LoadState, PageHeader, Segmented } from "../components/ui";
-import { useAsync } from "../lib/hooks";
+import { useAsync, useAutoRefresh } from "../lib/hooks";
 
 type Tab = "open" | "done" | "cancel" | "all";
 const QUERY: Record<Tab, { status?: string; include_cancelled?: boolean }> = {
@@ -21,6 +21,7 @@ export default function Orders() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Order | null>(null);
   const orders = useAsync(() => listOrders(QUERY[tab]), [tab]);
+  useAutoRefresh(() => !open && orders.refresh());  // 주문을 열어 보는 동안엔 멈춤
 
   const shown = useMemo(() => {
     const list = [...(orders.data ?? [])];
@@ -52,7 +53,7 @@ export default function Orders() {
         onChange={setTab}
         options={[
           { value: "open", label: "출고 전" },
-          { value: "done", label: "출고 완료" },
+          { value: "done", label: "완료" },
           { value: "cancel", label: "취소" },
           { value: "all", label: "전체" },
         ]}

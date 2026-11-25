@@ -14,7 +14,7 @@ HEADER_FIELDS = (
     "created_at", "source", "customer_id", "customer_name", "order_kg", "ship_method", "method_by",
     "recipient", "phone", "address", "zipcode", "due_date", "note", "status", "shipped_at",
     "carrier", "tracking_no", "truck_no", "driver_phone", "notified_at", "ext_order_no",
-    "stock_deducted", "settlement_id", "updated_at",
+    "stock_deducted", "settlement_id", "updated_at", "shipping_fee", "paid_at",
 )
 
 
@@ -90,7 +90,10 @@ def to_order_out(lines: list[dict[str, Any]], *, pallets: int = 0, boxes: int = 
         order_kg=order_kg,
         pallets=pallets,
         boxes=boxes,
-        total_amount=sum(amounts) if amounts else None,
+        # 단가가 빠진 줄이 하나라도 있으면 합계를 보여 주지 않는다 (일부만 더한 금액은 오해를 부른다)
+        total_amount=sum(amounts) if amounts and len(amounts) == len(out_lines) else None,
+        shipping_fee=head.get("shipping_fee") or 0,
+        paid_at=head.get("paid_at"),
         shipped_at=head.get("shipped_at"),
         carrier=head.get("carrier", ""),
         tracking_no=head.get("tracking_no", ""),

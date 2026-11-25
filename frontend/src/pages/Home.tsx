@@ -5,7 +5,8 @@ import { useToast } from "../components/Toast";
 import { Alert, Badge, Button, Card, Empty, LoadState, PageHeader } from "../components/ui";
 import { useFeatures } from "../lib/features";
 import { dateKo, isPast, kg, telHref, todayIso } from "../lib/format";
-import { useAction, useAsync } from "../lib/hooks";
+import { useAction, useAsync, useAutoRefresh } from "../lib/hooks";
+import { needsPayment } from "../lib/orders";
 
 export default function Home() {
   const toast = useToast();
@@ -18,9 +19,11 @@ export default function Home() {
   const remind = useAsync(() => (has("q4_reorder") ? reorderReminders() : Promise.resolve([])), []);
   const kakao = useAsync(() => (has("q2_briefing") && features?.integrations.kakao ? kakaoStatus() : Promise.resolve(null)), []);
   const brief = useAsync(() => (has("q2_briefing") ? briefingPreview() : Promise.resolve(null)), []);
+  useAutoRefresh(() => Promise.all([board.refresh(), prod.refresh()]));
 
   const all = [...(board.data?.parcel ?? []), ...(board.data?.truck ?? [])];
   const overdue = all.filter((o) => isPast(o.due_date));
+  const unpaid = all.filter(needsPayment);
   const today = new Date();
 
   return (
@@ -52,6 +55,12 @@ export default function Home() {
             <div className="truncate text-sm opacity-90">{overdue.map((o) => o.customer_name).join(", ") || "없음"}</div>
           </div>
         </div>
+      )}
+
+      {unpaid.length > 0 && (
+        <Alert tone="warn" action={<Link to="/today"><Button size="sm">확인하기</Button></Link>}>
+          💰 입금 확인을 기다리는 웹 주문 {unpaid.length}건 · {[...new Set(unpaid.map((o) => o.customer_name))].join(", ")}
+        </Alert>
       )}
 
       <div className="mb-4 grid grid-cols-2 gap-3">

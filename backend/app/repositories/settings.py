@@ -30,7 +30,11 @@ class SettingsRepo(Repository[AppSettings]):
             v = raw.get(name)
             if v is None or v == "":
                 continue
-            data[name] = str(v).replace(",", "") if name.endswith(("_kg", "_days", "_factor", "_orders")) else str(v)
+            if name.endswith(("_kg", "_days", "_factor", "_orders", "_fee", "_over")) and name != "closed_days":
+                # 시트에 '3,000원' 처럼 적어도 숫자로 읽는다
+                data[name] = str(v).replace(",", "").replace("원", "").strip()
+            else:
+                data[name] = str(v)
         try:
             return AppSettings(**data)
         except ValidationError:
