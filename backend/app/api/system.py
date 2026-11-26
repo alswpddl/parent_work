@@ -99,7 +99,6 @@ def status(ctx: AppContext = Depends(get_ctx)) -> dict:
         "google": google_info(ctx),
         "kakao_bot": {
             "enabled": bool(ctx.config.kakao_skill_key) and "kakao_bot" in ctx.services,
-            "ai": ctx.claude.enabled,
             # 관리자만 보는 화면이라 비밀 키가 들어간 주소를 그대로 보여 준다 (챗봇 관리자센터에 붙여넣기용)
             "skill_url": f"{ctx.config.public_api_url.rstrip('/')}/api/kakao/skill?key={ctx.config.kakao_skill_key}"
             if ctx.config.kakao_skill_key else "",

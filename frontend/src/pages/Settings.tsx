@@ -672,7 +672,7 @@ function KakaoBotCard({ b }: { b: SystemStatus["kakao_bot"] }) {
       {b.enabled ? (
         <>
           <Alert tone="ok">
-            챗봇 서버가 켜져 있어요. {b.ai ? "모르는 질문은 AI가 짧게 답해요." : "AI 키가 없어서, 모르는 질문은 전화 안내로 답해요."}
+            챗봇 서버가 켜져 있어요. 정해진 질문에만 답하고, 그 밖의 말에는 메뉴 버튼과 전화번호를 보여 줘요.
           </Alert>
           <div className="mb-3 rounded-xl bg-white p-3">
             <div className="text-sm text-stone-500">스킬 주소 — 카카오 챗봇 관리자센터 [스킬] 에 붙여넣기 (남에게 보여 주지 마세요)</div>
