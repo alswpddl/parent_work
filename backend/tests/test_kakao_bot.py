@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
-from app.integrations.claude_client import ClaudeClient
 from app.schemas.settings import SettingsPatch
 
 
@@ -69,27 +66,21 @@ def test_order_lookup(full_ctx):
     assert "찾지 못했어요" in _texts(_ask(full_ctx, f"{out.order_id} 1234"))
 
 
-def test_free_question_uses_ai_or_logs(full_ctx):
-    t = _texts(_ask(full_ctx, "보관은 어떻게 해요?"))  # AI 없음 → 전화 안내 + 기록
-    assert "잘 못 알아들었어요" in t
-    assert any(r.get("action") == "챗봇 질문" for r in full_ctx.logs.rows(fresh=True))
-
-    calls = {}
-
-    class FakeMessages:
-        def create(self, **kw):
-            calls.update(kw)
-            return SimpleNamespace(content=[SimpleNamespace(type="text", text="냉장 보관해 주세요 🙂")])
-
-    full_ctx.claude = ClaudeClient("", "m", client=SimpleNamespace(messages=FakeMessages()))
-    assert "냉장 보관" in _texts(_ask(full_ctx, "보관은 어떻게 해요?"))
-    assert "참기름" in calls["system"] and "지어내지" in calls["system"]  # 공장 정보만 보고 답하게
+def test_unknown_question_gets_menu_and_is_logged(full_ctx):
+    r = _ask(full_ctx, "보관은 어떻게 해요?")
+    assert "잘 못 알아들었어요" in _texts(r) and "버튼에서 골라" in _texts(r)
+    assert [q["label"] for q in r["template"]["quickReplies"]][0] == "상품·가격"
+    assert any(x.get("action") == "챗봇 질문" and "보관" in x.get("detail", "") for x in full_ctx.logs.rows(fresh=True))
 
 
-def test_ai_failure_falls_back(full_ctx):
+def test_never_calls_ai(full_ctx):
+    from types import SimpleNamespace
+
+    from app.integrations.claude_client import ClaudeClient
+
     class Boom:
         def create(self, **kw):
-            raise TimeoutError("slow")
+            raise AssertionError("챗봇은 AI 를 부르면 안 돼요")
 
     full_ctx.claude = ClaudeClient("", "m", client=SimpleNamespace(messages=Boom()))
     assert "잘 못 알아들었어요" in _texts(_ask(full_ctx, "보관은 어떻게 해요?"))

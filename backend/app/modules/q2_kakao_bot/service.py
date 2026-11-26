@@ -1,25 +1,20 @@
 """카카오톡 챗봇 답변 만들기.
 
-카카오 스킬은 5초 안에 답해야 해서:
-1) 규칙으로 바로 답할 수 있는 질문(상품·가격, 택배비, 받는 날, 계좌, 주문 조회, 전화, 주문하기)은 규칙으로
-2) 나머지는 AI(있으면)가 3.5초 안에, 공장 정보만 보고 짧게
-3) 그래도 못 하면 "전화 주세요" + 빠른 메뉴
-답을 못 한 질문은 _기록 탭에 '챗봇 질문'으로 남겨서 부모님이 자주 묻는 걸 볼 수 있게 한다.
+정해진 질문에만 정해진 답을 한다 (AI 없음):
+  인사 · 상품·가격 · 상품 이름/별칭 · 주문하기 · 택배비 · 받는 날 · 입금 계좌 · 주문 조회 · 전화
+그 밖의 말에는 "잘 못 알아들었어요" + 빠른 메뉴 + 전화번호로 답하고,
+그 질문은 _기록 탭에 '챗봇 질문'으로 남겨서 부모님이 자주 묻는 걸 볼 수 있게 한다.
 """
 
 from __future__ import annotations
 
 import hashlib
-import logging
 import re
 from typing import Any
 
 from ...core.errors import AppError
-from ...core.timeutil import fmt_date_ko, today
-from ...integrations.claude_client import ClaudeUnavailable
+from ...core.timeutil import fmt_date_ko
 from ...schemas.settings import WEEKDAYS_KO, closed_weekdays
-
-log = logging.getLogger(__name__)
 
 ORDER_ID_RE = re.compile(r"[Oo]-?\s?(\d{8})-?\s?(\d{3})")
 QUICK = ["상품·가격", "주문하기", "택배비", "받는 날", "주문 조회", "입금 계좌", "전화 연결"]
@@ -246,54 +241,14 @@ class KakaoBot:
             ]))
         return respond(*outs)
 
-    # ---------------------------------------------------------------- 자유 질문
-    def _facts(self) -> str:
-        st = self.ctx.settings.load()
-        info = self._shop_info()
-        lines = [f"공장: {st.factory_name} / 전화 {st.factory_phone} / 주소 {st.factory_address}"]
-        if st.shop_intro:
-            lines.append(f"소개: {st.shop_intro}")
-        if st.shop_notice:
-            lines.append(f"공지: {st.shop_notice}")
-        if info:
-            for p in info.products:
-                lines.append(
-                    f"상품: {p.name} {p.spec} ({p.unit})"
-                    + (f" {p.price:,}원" if p.price is not None else "")
-                    + (" 품절" if p.sold_out else "")
-                    + (f" — {p.description}" if p.description else "")
-                )
-            lines.append(f"가장 빠른 받는 날: {fmt_date_ko(info.min_due_date)}, 쉬는 요일: {info.closed_days_text or '없음'}")
-        lines.append(
-            f"택배비: {st.shop_shipping_fee:,}원" if st.shop_shipping_fee else "택배비: 주문 확인 후 안내"
-        )
-        if st.shop_free_shipping_over:
-            lines.append(f"{st.shop_free_shipping_over:,}원 이상 무료배송")
-        if st.bank_account:
-            lines.append(f"입금 계좌: {st.bank_account}")
-        lines.append(f"주문서 주소: {self._shop_url()}")
-        lines.append(f"오늘: {fmt_date_ko(today())}")
-        return "\n".join(lines)
-
+    # ---------------------------------------------------------------- 정해진 질문이 아닐 때
     def _free(self, text: str, user: str) -> dict:
         st = self.ctx.settings.load()
-        claude = self.ctx.claude
-        if text and claude.enabled:
-            system = (
-                "너는 작은 젓갈 공장의 카카오톡 채널 상담원이다. 손님에게 존댓말로, 3~4문장 안으로 짧고 따뜻하게 답한다.\n"
-                "아래 [공장 정보]에 있는 사실만 말한다. 없는 건 지어내지 말고 '전화로 문의해 주세요'라고 안내한다.\n"
-                "가격·재고·배송 날짜를 약속하지 않는다. 주문은 주문서 주소로 안내한다. 이모지는 1개까지.\n"
-                "건강·의학적 효능은 말하지 않는다. 젓갈과 상관없는 요청은 정중히 사양한다.\n\n"
-                f"[공장 정보]\n{self._facts()}"
-            )
-            try:
-                reply = claude.complete(system=system, user=text[:500], max_tokens=300, timeout=3.5)
-                return respond(text_out(reply))
-            except ClaudeUnavailable as e:
-                log.info("kakao bot AI skipped: %s", e)
-        self.ctx.logs.write("챗봇 질문", "카카오톡", text[:200], actor="챗봇")
-        msg = "질문을 잘 못 알아들었어요 🙏 아래 버튼에서 골라 주시거나,"
-        msg += f"\n{st.factory_phone} 로 전화 주세요." if st.factory_phone else " 남겨 주시면 확인하고 연락드릴게요."
+        if text:
+            self.ctx.logs.write("챗봇 질문", "카카오톡", text[:200], actor="챗봇")
+        msg = "질문을 잘 못 알아들었어요 🙏\n아래 버튼에서 골라 주세요."
+        if st.factory_phone:
+            msg += f"\n그 밖의 문의는 {st.factory_phone} 로 전화 주세요."
         return respond(text_out(msg))
 
 
