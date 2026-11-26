@@ -40,12 +40,24 @@ export default function NewOrder() {
     }
   }, [masters.data, presetCustomer]);
 
-  const parse = async () => {
-    if (!text.trim()) return toast("먼저 카톡 주문 내용을 붙여넣어 주세요.", "error");
+  // 카카오톡에서 [공유] → '공장 관리' 로 보내면 ?text=… 로 들어온다 → 바로 붙여넣고 정리
+  const shared = [params.get("title"), params.get("text"), params.get("url")].filter(Boolean).join("\n").trim();
+  const [sharedDone, setSharedDone] = useState(false);
+  useEffect(() => {
+    if (!shared || sharedDone || !masters.data) return;
+    setSharedDone(true);
+    setText(shared);
+    void parse(shared);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shared, masters.data]);
+
+  const parse = async (input?: string) => {
+    const body = (input ?? text).trim();
+    if (!body) return toast("먼저 카톡 주문 내용을 붙여넣어 주세요.", "error");
     setParsing(true);
     setSaved(null);
     try {
-      const d = await parseOrder(text);
+      const d = await parseOrder(body);
       setDraft(d);
       setForm(draftToForm(d));
       setFormKey((k) => k + 1);
@@ -80,8 +92,11 @@ export default function NewOrder() {
 
       <Card>
         <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="여기에 붙여넣기" className="min-h-[180px]" />
+        <p className="mt-2 text-sm text-stone-500">
+          휴대폰에 '공장 관리' 앱을 설치해 두면, 카카오톡 주문 메시지를 길게 눌러 [공유] → [공장 관리]로 바로 보낼 수 있어요.
+        </p>
         <div className="mt-3 flex flex-col gap-2 md:flex-row">
-          <Button size="xl" block loading={parsing} icon={<Sparkles className="h-6 w-6" />} onClick={parse}>
+          <Button size="xl" block loading={parsing} icon={<Sparkles className="h-6 w-6" />} onClick={() => parse()}>
             {features?.ai_parser ? "AI로 주문 정리하기" : "주문 정리하기"}
           </Button>
           <Button

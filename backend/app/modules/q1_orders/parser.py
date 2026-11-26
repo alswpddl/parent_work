@@ -168,12 +168,88 @@ def resolve_due_date(text: str, day: date | None = None) -> date | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# 카톡 말투 다듬기: "두 통" → "2통", "이십키로" → "20키로", "1.8리터"/"20짜리" → 품목 규격
+# ---------------------------------------------------------------------------
+_NATIVE = {"하나": 1, "한": 1, "둘": 2, "두": 2, "셋": 3, "세": 3, "석": 3, "넷": 4, "네": 4, "다섯": 5,
+           "여섯": 6, "일곱": 7, "여덟": 8, "아홉": 9, "열": 10, "스물": 20, "스무": 20}
+_UNIT_WORDS = r"(?:개|통|병|박스|말통|말|봉|포)"
+_NATIVE_QTY = re.compile(r"(?<![가-힣])(" + "|".join(sorted(_NATIVE, key=len, reverse=True)) + r")\s*(" + _UNIT_WORDS + ")")
+_NATIVE_ALONE = re.compile(r"(?<![가-힣])(하나|둘|셋|넷|다섯)(?=\s*(?:만|씩|요|주세요|보내|이랑|랑|하고|$|\s|[,.!]))")
+_SINO_DIGIT = {"일": 1, "이": 2, "삼": 3, "사": 4, "오": 5, "육": 6, "칠": 7, "팔": 8, "구": 9}
+_SINO_SPEC = re.compile(r"(?<![가-힣])([일이삼사오육칠팔구십]{1,3}(?:점[일이삼사오육칠팔구])?)\s*(?=키로|킬로|kg|리터|l\b|짜리)", re.IGNORECASE)
+_SPEC_TOKEN = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)\s*(kg|키로|킬로|키|l|리터|ℓ|짜리)?(?![\d.])", re.IGNORECASE)
+
+
+def _sino(word: str) -> str | None:
+    head, _, frac = word.partition("점")
+    if "십" in head:
+        a, _, b = head.partition("십")
+        if (a and a not in _SINO_DIGIT) or (b and b not in _SINO_DIGIT):
+            return None
+        n = (_SINO_DIGIT[a] if a else 1) * 10 + (_SINO_DIGIT[b] if b else 0)
+    elif len(head) == 1 and head in _SINO_DIGIT:
+        n = _SINO_DIGIT[head]
+    else:
+        return None
+    if frac:
+        if frac not in _SINO_DIGIT:
+            return None
+        return f"{n}.{_SINO_DIGIT[frac]}"
+    return str(n)
+
+
+def _spec_value(spec: str) -> float | None:
+    m = re.match(r"\s*(\d+(?:\.\d+)?)\s*(kg|l|g|ml|키로|리터)?", (spec or "").lower())
+    if not m:
+        return None
+    v = float(m.group(1))
+    return v / 1000 if m.group(2) in ("g", "ml") else v
+
+
+def plain_korean(text: str) -> str:
+    """수량·규격을 숫자로: '두 통'→'2통', '하나'→'1', '이십키로'→'20키로'"""
+    text = _SINO_SPEC.sub(lambda m: _sino(m.group(1)) or m.group(1), text)
+    text = _NATIVE_QTY.sub(lambda m: f"{_NATIVE[m.group(1)]}{m.group(2)}", text)
+    return _NATIVE_ALONE.sub(lambda m: str(_NATIVE[m.group(1)]), text)
+
+
+def canon_specs(seg: str, products: list[ProductOut]) -> str:
+    """'1.8리터' '1.8 ' '20짜리' '5키' 처럼 적어도 품목 규격(1.8kg·20kg)으로 바꿔 둔다.
+    단위가 붙었거나 소수점이 있는 숫자만 규격으로 본다 (그냥 '10'은 수량)."""
+    values: dict[float, str] = {}
+    for p in products:
+        v = _spec_value(p.spec)
+        if v is not None:
+            values.setdefault(v, p.spec)
+
+    def fix(m: re.Match[str]) -> str:
+        num, unit = m.group(1), (m.group(2) or "")
+        if not unit and "." not in num:
+            return m.group(0)
+        spec = values.get(float(num))
+        return f"{spec} " if spec else m.group(0)
+
+    return _SPEC_TOKEN.sub(fix, seg)
+
+
 def _segments(text: str) -> list[str]:
-    parts = re.split(r"[\n,，、;/]+", text)
+    # 줄·쉼표 + '랑/하고/이랑' + '5키로2 말통1'처럼 수량 숫자 뒤 띄어쓰기에서 나눈다
+    parts = re.split(r"[\n,，、;/]+|(?<=\S)(?:이랑|랑|하고|그리고)\s+|(?<=\d)\s+(?=[가-힣])", text)
     out: list[str] = []
     for p in parts:
         # "참기름1.8L 10개 들기름1.8L 5개" 처럼 한 줄에 여러 개면 수량 단위 뒤에서 자른다
-        out.extend(s for s in re.split(r"(?<=[개통병봉포])\s+", p) if s.strip())
+        chunks = [c for c in re.split(r"(?<=[개통병봉포])\s+", p) if c.strip()]
+        # '액젓 말통 2개'처럼 숫자 없는 조각은 다음 조각에 붙인다 (이름만 있고 수량은 뒤에)
+        buf = ""
+        for c in chunks:
+            if not re.search(r"\d", c):
+                buf += c + " "
+                continue
+            out.append(buf + c)
+            buf = ""
+        if buf.strip():
+            out.append(buf)
     return [s.strip() for s in out if s.strip()]
 
 
@@ -184,22 +260,28 @@ def parse_with_rules(
     items: dict[str, ParsedItem] = {}
     unknown: list[ParsedItem] = []
 
-    for seg in _segments(text):
-        nseg = normalize(seg)
+    for seg in _segments(plain_korean(text)):
+        nseg = normalize(canon_specs(seg, products))
         # 규격이 들어 있는 품목 후보
         cands = [p for p in products if p.spec and norm_spec(p.spec) in nseg]
         named = [p for p in cands if normalize(p.name) in nseg or any(normalize(a) in nseg for a in p.alias_list())]
         pool = named or cands
         if not pool:
-            # 규격 없이 이름만 있는 경우 (그 이름의 품목이 하나뿐일 때만 확정)
-            by_name = [p for p in products if len(normalize(p.name)) >= 2 and normalize(p.name) in nseg]
-            if not by_name:
+            # 규격 없이 이름·별칭만 있는 경우 ('액젓 말통 2개'): 가장 길게 맞은 이름의 품목이 하나뿐일 때만 확정
+            hits: dict[str, tuple[int, ProductOut, list[str]]] = {}
+            for p in products:
+                words = [w for w in [normalize(p.name), *(normalize(a) for a in p.alias_list())] if len(w) >= 2 and w in nseg]
+                if words:
+                    hits[p.sku] = (max(len(w) for w in words), p, words)
+            if not hits:
                 continue
-            qty = _qty_after_removing(nseg, [normalize(p.name) for p in by_name])
+            best = max(h[0] for h in hits.values())
+            top = [h for h in hits.values() if h[0] == best]
+            qty = _qty_after_removing(nseg, [w for h in hits.values() for w in h[2]])
             if qty is None:
                 continue
-            if len(by_name) == 1:
-                _add(items, by_name[0], qty, seg)
+            if len(top) == 1:
+                _add(items, top[0][1], qty, seg)
             else:
                 unknown.append(ParsedItem(raw_name=seg, qty=qty))
             continue
@@ -278,6 +360,4 @@ def parse_order_text(
         except ClaudeUnavailable as e:
             log.warning("AI 파싱 실패 → 규칙 파서 사용: %s", e)
             warnings.append("AI 정리가 안 돼서 간단 규칙으로 정리했어요. 품목과 수량을 꼭 확인해 주세요.")
-    elif use_ai:
-        warnings.append("AI 키가 설정되지 않아 간단 규칙으로 정리했어요.")
     return parse_with_rules(text, customers, products, day), "rule", warnings
