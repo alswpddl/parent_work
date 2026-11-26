@@ -40,7 +40,7 @@ def test_health_and_features(client):
     assert client.get("/api/health").json()["ok"] is True
     f = client.get("/api/system/features").json()
     assert [m["name"] for m in f["modules"]][:3] == ["q1_masters", "q1_orders", "q1_shipping"]
-    assert len(f["modules"]) == 12
+    assert len(f["modules"]) == 13
     assert f["ai_parser"] is False and f["auth_required"] is True
 
 
@@ -229,3 +229,13 @@ def test_shop_account_http_flow(client):
     cid = next(c["customer_id"] for c in client.get("/api/customers").json() if c["phone"] == "010-7777-8888")
     assert client.post(f"/api/customers/{cid}/reset-web-password").json()["has_web_account"] is False
     assert public.get("/api/public/shop/me", headers=h).status_code == 401
+
+
+def test_kakao_skill_requires_key(client):
+    body = {"userRequest": {"utterance": "택배비", "user": {"id": "x"}}}
+    assert client.post("/api/kakao/skill", json=body).status_code == 404  # 키가 없으면 꺼져 있음
+    client.app.state.ctx.config.kakao_skill_key = "s3cret"
+    assert client.post("/api/kakao/skill?key=wrong", json=body).status_code == 404
+    r = client.post("/api/kakao/skill?key=s3cret", json=body)
+    assert r.status_code == 200 and r.json()["version"] == "2.0"
+    assert client.get("/api/system/status").json()["kakao_bot"]["skill_url"].endswith("/api/kakao/skill?key=s3cret")

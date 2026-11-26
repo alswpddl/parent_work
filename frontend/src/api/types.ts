@@ -28,6 +28,7 @@ export interface SystemStatus {
   modules: string[];
   sheets_backend: string;
   google: { connected: boolean; service_account_email: string; spreadsheet_url: string; system_spreadsheet_url: string };
+  kakao_bot: { enabled: boolean; ai: boolean; skill_url: string };
 }
 
 // ---------------------------------------------------------------- 기준정보
