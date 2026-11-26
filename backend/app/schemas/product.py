@@ -21,6 +21,7 @@ class ProductBase(BaseModel):
     description: str = Field(default="", max_length=200)
     shop_visible: bool = True
     sold_out: bool = False
+    lead_days: int | None = Field(default=None, ge=0, le=60)
     image_url: str = Field(default="", max_length=500)
     # 4분기: 세금·자재 매핑
     tax_type: TaxType = ""
@@ -54,6 +55,7 @@ class ProductPatch(BaseModel):
     description: str | None = Field(default=None, max_length=200)
     shop_visible: bool | None = None
     sold_out: bool | None = None
+    lead_days: int | None = Field(default=None, ge=0, le=60)
     image_url: str | None = Field(default=None, max_length=500)
     tax_type: TaxType | None = None
     container_item: str | None = None
@@ -111,6 +113,7 @@ class ProductOut(ProductBase):
             retail_price=d.get("retail_price") if (d.get("retail_price") or 0) > 0 else None,
             sold_out=d.get("sold_out") is True,
             image_url=d.get("image_url") or "",
+            lead_days=_lead(d.get("lead_days")),
             tax_type=tax if tax in ("과세", "면세") else "",  # type: ignore[arg-type]
             container_item=d.get("container_item") or "",
             box_item=d.get("box_item") or "",
@@ -122,3 +125,11 @@ class ProductOut(ProductBase):
 
     def alias_list(self) -> list[str]:
         return [a.strip() for a in self.aliases.replace("，", ",").split(",") if a.strip()]
+
+
+def _lead(v: object) -> int | None:
+    """시트 '준비일' 칸 → 0 이상 정수, 비었거나 이상하면 None (_설정 기본값 사용)"""
+    if isinstance(v, bool) or not isinstance(v, int):
+        return None
+    return v if 0 <= v <= 60 else None
+

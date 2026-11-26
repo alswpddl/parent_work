@@ -26,6 +26,9 @@ SETTING_DEFS: list[tuple[str, str, str, str]] = [
     ("shop_notice", "웹 주문서 안내 문구", "", "주문서 맨 위에 보이는 문구 (예: 오후 2시 전 주문은 당일 출고)"),
     ("privacy_retention", "개인정보 보관 기간", "주문일로부터 1년", "웹 주문서 개인정보 동의 문구에 표시"),
     ("shop_intro", "웹 주문서 공장 소개", "", "주문서 첫 화면에 보이는 소개 (예: 통영에서 30년, 국산 새우로 직접 담급니다)"),
+    ("contact_hours", "문의 받는 시간", "", "주문서·챗봇에 보여요. 예) 오전 8시 ~ 오후 4시"),
+    ("quiet_hours", "밤 알림 쉬는 시간", "", "예) 20:00-07:00 — 이 시간에 들어온 주문은 바로 알리지 않고 아침 브리핑에 모아서 알려요"),
+    ("daily_capacity_kg", "하루 최대 작업량(kg)", "0", "오늘의 할당량에 넘침 경고. 0 이면 끔"),
     ("shop_shipping_fee", "웹 주문 택배비(원)", "0", "0 이면 '택배비는 확인 후 안내'로 표시"),
     ("shop_free_shipping_over", "택배비 무료 기준 금액(원)", "0", "이 금액 이상 주문하면 택배비 무료. 0 이면 무료 없음"),
     ("closed_days", "받는 날로 못 고르는 요일", "일", "쉼표로 (예: 일 또는 토,일). 택배가 쉬는 날. 없으면 '없음'"),
@@ -65,6 +68,9 @@ class AppSettings(BaseModel):
     shop_notice: str = ""
     privacy_retention: str = "주문일로부터 1년"
     shop_intro: str = ""
+    contact_hours: str = ""
+    quiet_hours: str = ""
+    daily_capacity_kg: float = Field(default=0, ge=0)
     shop_shipping_fee: int = Field(default=0, ge=0, le=100_000)
     shop_free_shipping_over: int = Field(default=0, ge=0)
     closed_days: str = "일"
@@ -109,6 +115,9 @@ class SettingsPatch(BaseModel):
     shop_notice: str | None = None
     privacy_retention: str | None = Field(default=None, max_length=60)
     shop_intro: str | None = Field(default=None, max_length=500)
+    contact_hours: str | None = Field(default=None, max_length=60)
+    quiet_hours: str | None = Field(default=None, max_length=20)
+    daily_capacity_kg: float | None = Field(default=None, ge=0)
     shop_shipping_fee: int | None = Field(default=None, ge=0, le=100_000)
     shop_free_shipping_over: int | None = Field(default=None, ge=0)
     closed_days: str | None = Field(default=None, max_length=20)
@@ -131,3 +140,18 @@ WEEKDAYS_KO = "월화수목금토일"
 def closed_weekdays(text: str) -> set[int]:
     """'토,일' → {5, 6} (월=0). 모르는 글자는 무시."""
     return {WEEKDAYS_KO.index(ch) for ch in (text or "") if ch in WEEKDAYS_KO}
+
+
+def in_quiet_hours(spec: str, t) -> bool:
+    """'20:00-07:00' 처럼 적힌 시간 안이면 True (자정을 넘겨도 됨). 비었거나 잘못 적으면 False."""
+    import re
+
+    m = re.match(r"^\s*(\d{1,2})(?::(\d{2}))?\s*[-~]\s*(\d{1,2})(?::(\d{2}))?\s*$", spec or "")
+    if not m:
+        return False
+    start = int(m.group(1)) * 60 + int(m.group(2) or 0)
+    end = int(m.group(3)) * 60 + int(m.group(4) or 0)
+    cur = t.hour * 60 + t.minute
+    if start == end:
+        return False
+    return start <= cur < end if start < end else (cur >= start or cur < end)

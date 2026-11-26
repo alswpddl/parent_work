@@ -6,13 +6,14 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from pydantic import BaseModel
 
 from ...core.briefing import BriefingSection
 from ...core.timeutil import WEEKDAYS_KO, now, today
+from ...schemas.settings import in_quiet_hours
 from ...schemas.common import OPEN_STATUSES
 
 
@@ -29,6 +30,29 @@ class BriefingOut(BaseModel):
     enabled: bool
 
 
+def night_order_lines(ctx: Any, day: date) -> list[str]:
+    """밤 알림 쉬는 시간에 들어와서 바로 못 알린 웹·셀프 주문 (최근 24시간)"""
+    st = ctx.settings.load()
+    if not st.quiet_hours or not st.notify_new_self_order:
+        return []
+    end = now().replace(tzinfo=None) if day == today() else datetime.combine(day, time(12, 0))
+    start = end - timedelta(hours=24)
+    night = []
+    for o in ctx.orders.query(statuses=list(OPEN_STATUSES)):
+        c = o.created_at.replace(tzinfo=None) if o.created_at else None
+        if o.source in ("셀프주문", "웹주문서") and c and start <= c <= end and in_quiet_hours(st.quiet_hours, c):
+            night.append(o)
+    if not night:
+        return []
+    out = [f"🌙 밤사이 들어온 주문 {len(night)}건"]
+    for o in night[:8]:
+        items = ", ".join(f"{l.product_name} {l.qty}" for l in o.lines)
+        out.append(f" · {o.customer_name}: {items} (납기 {o.due_date.month}/{o.due_date.day})" if o.due_date else f" · {o.customer_name}: {items}")
+    if len(night) > 8:
+        out.append(f" · 외 {len(night) - 8}건")
+    return out
+
+
 def core_section(ctx: Any, day: date) -> BriefingSection | None:
     open_orders = ctx.orders.query(statuses=list(OPEN_STATUSES))
     tomorrow = day + timedelta(days=1)
@@ -38,7 +62,8 @@ def core_section(ctx: Any, day: date) -> BriefingSection | None:
     parcel = sum(1 for o in open_orders if o.ship_method == "택배")
     truck = sum(1 for o in open_orders if o.ship_method == "화물")
 
-    lines = [f"📦 택배 {parcel}건 · 🚚 화물 {truck}건 출고 대기"]
+    lines = night_order_lines(ctx, day)
+    lines.append(f"📦 택배 {parcel}건 · 🚚 화물 {truck}건 출고 대기")
     if overdue:
         lines.append(f"⏰ 납기 지난 주문 {len(overdue)}건: " + ", ".join(o.customer_name for o in overdue[:5]))
     lines.append(f"오늘 납기 {len(due_today)}건 · 내일 납기 {len(due_tomorrow)}건")

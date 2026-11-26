@@ -191,7 +191,14 @@ class KakaoBot:
         info = self._shop_info()
         closed = sorted(closed_weekdays(st.closed_days))
         msg = "📅 "
-        if info:
+        leads = sorted({p.lead_days for p in info.products}) if info else []
+        if info and len(leads) > 1:
+            # 품목마다 준비 기간이 다르면 품목별로 알려 줘요
+            msg += "주문 받고 바로 소분해서 보내 드려요. 준비 기간은 품목마다 달라요."
+            for d in leads:
+                names = ", ".join(f"{p.name} {p.spec}".strip() for p in info.products if p.lead_days == d)
+                msg += f"\n · {names}: 주문 {d}일 뒤부터" if d else f"\n · {names}: 당일"
+        elif info:
             msg += f"지금 주문하시면 {fmt_date_ko(info.min_due_date)}부터 받을 수 있어요."
         else:
             msg += f"주문 후 {st.self_order_lead_days}일 뒤부터 받을 수 있어요."
@@ -213,7 +220,12 @@ class KakaoBot:
         st = self.ctx.settings.load()
         if not st.factory_phone:
             return respond(text_out("이 채팅으로 남겨 주시면 확인하고 연락드릴게요."))
-        return respond(card_out("☎ 전화 상담", f"{st.factory_name} {st.factory_phone}\n바쁠 때는 못 받을 수 있어요. 문자 남겨 주시면 연락드려요.", self._phone_btn(st)))
+        hours = f"\n문의 시간: {st.contact_hours}" if st.contact_hours else ""
+        return respond(card_out(
+            "☎ 전화 상담",
+            f"{st.factory_name} {st.factory_phone}{hours}\n바쁠 때는 못 받을 수 있어요. 채팅 남겨 주시면 연락드려요.",
+            self._phone_btn(st),
+        ))
 
     def _lookup(self, text: str, user: str) -> dict:
         m = ORDER_ID_RE.search(text)

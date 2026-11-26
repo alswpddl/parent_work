@@ -181,3 +181,34 @@ def test_lookup_needs_matching_phone_tail(full_ctx):
         _svc(full_ctx).lookup("O-20000101-001", "8888", "3.3.3.3")
     with pytest.raises(ValidationFailed):
         _svc(full_ctx).lookup(out.order_id, "88", "3.3.3.3")
+
+
+def test_lead_days_per_product(full_ctx):
+    """품목마다 준비일이 다르면 가장 오래 걸리는 품목 기준"""
+    from datetime import timedelta
+
+    from app.modules.q2_self_order.service import lead_for
+
+    st = full_ctx.settings.load()
+    full_ctx.products.update(("PER-18L",), {"lead_days": 3})
+    p = full_ctx.products.map()["PER-18L"]
+    assert p.lead_days == 3
+    assert lead_for(st, [p]) == 3
+    assert lead_for(st, []) == st.self_order_lead_days
+    s = _svc(full_ctx)
+    info = s.info()
+    assert any(x.sku == "PER-18L" and x.lead_days == 3 for x in info.products)
+    with pytest.raises(ValidationFailed, match="받는 날"):
+        s.place(_body(items=[OrderItemIn(sku="PER-18L", qty=1)], due_date=today() + timedelta(days=1)))
+
+
+def test_quiet_hours():
+    from datetime import time
+
+    from app.schemas.settings import in_quiet_hours
+
+    assert in_quiet_hours("20:00-07:00", time(23, 30))
+    assert in_quiet_hours("20:00-07:00", time(6, 59))
+    assert not in_quiet_hours("20:00-07:00", time(7, 0))
+    assert not in_quiet_hours("", time(2, 0))
+    assert not in_quiet_hours("엉터리", time(2, 0))

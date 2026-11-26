@@ -188,6 +188,16 @@ export function formatPhone(s: string): string {
 }
 
 /** 'YYYY-MM-DD' → 0=월 … 6=일 */
+/** 담은 품목 중 가장 오래 걸리는 준비일 → 쉬는 요일을 건너뛴 첫날 */
+export function minDueFor(info: ShopInfo, products: { lead_days: number }[]): string {
+  if (!products.length) return info.min_due_date;
+  const lead = Math.max(...products.map((p) => p.lead_days));
+  const d = new Date();
+  d.setDate(d.getDate() + lead);
+  for (let i = 0; i < 7 && info.closed_weekdays.includes((d.getDay() + 6) % 7); i++) d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export function weekdayOf(iso: string): number {
   const [y, m, d] = iso.split("-").map(Number);
   return (new Date(y, m - 1, d).getDay() + 6) % 7;

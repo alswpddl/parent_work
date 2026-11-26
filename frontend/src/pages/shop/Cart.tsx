@@ -8,7 +8,7 @@ import type { ShopInfo, ShopProduct } from "../../api/types";
 import { Alert, Button, Field, Input, Modal, Stepper, Textarea, cx } from "../../components/ui";
 import { dateKo, won } from "../../lib/format";
 import { AddressField, ProductArt, Row, SectionTitle, joinAddress, type Address } from "./parts";
-import { LAST_KEY, MOBILE_RE, WEEK, digits, formatPhone, itemPath, newToken, store, useShop, weekdayOf } from "./store";
+import { LAST_KEY, MOBILE_RE, WEEK, digits, formatPhone, itemPath, minDueFor, newToken, store, useShop, weekdayOf } from "./store";
 
 const ME_KEY = "shop.me"; // 비회원이 '기억하기'를 고르면 받는 분 정보 저장
 
@@ -40,6 +40,8 @@ export default function Cart() {
     () => Object.entries(s.cart).filter(([sku, q]) => q > 0 && s.bySku[sku]).map(([sku, q]) => ({ p: s.bySku[sku] as ShopProduct, qty: q })),
     [s.cart, s.bySku],
   );
+  const minDue = minDueFor(shop, picked.map((x) => x.p));
+  const slow = picked.filter((x) => x.p.lead_days > 1);
   const count = picked.reduce((a, x) => a + x.qty, 0);
   const subtotal = shop.show_prices && picked.every((x) => x.p.price !== null) ? picked.reduce((a, x) => a + x.qty * (x.p.price ?? 0), 0) : null;
   const ship = estimateShipping(shop, subtotal, picked.reduce((a, x) => a + x.qty * x.p.unit_kg, 0));
@@ -75,7 +77,7 @@ export default function Cart() {
     if (!who.name.trim()) e.name = "받는 분 성함을 적어 주세요.";
     if (!MOBILE_RE.test(digits(who.phone))) e.phone = "휴대폰 번호를 확인해 주세요. 예) 010-1234-5678";
     if (address.length < 5) e.address = "받는 주소를 적어 주세요.";
-    if (due && due < shop.min_due_date) e.due = `${dateKo(shop.min_due_date)}부터 고를 수 있어요.`;
+    if (due && due < minDue) e.due = `담으신 품목은 ${dateKo(minDue)}부터 받을 수 있어요.`;
     else if (dueClosed) e.due = `${WEEK[weekdayOf(due)]}요일은 택배가 쉬어요. 다른 날을 골라 주세요.`;
     if (!member && password && password.length < 4) e.password = "비밀번호는 4자리 이상으로 만들어 주세요.";
     if (!agree) e.agree = "개인정보 수집·이용에 동의해 주세요.";
@@ -203,11 +205,11 @@ export default function Cart() {
             errors.due || dueClosed ? (
               <span className="text-red-700">{errors.due || `${WEEK[weekdayOf(due)]}요일은 택배가 쉬어요. 다른 날을 골라 주세요.`}</span>
             ) : (
-              `${dateKo(shop.min_due_date)}부터 고를 수 있어요${shop.closed_days_text ? ` (${shop.closed_days_text}요일 제외)` : ""}. 비워 두면 가장 빠른 날로 보내 드려요.`
+              `${dateKo(minDue)}부터 고를 수 있어요${slow.length ? ` (${slow.map((x) => `${x.p.name} ${x.p.spec}`.trim()).join(", ")}은 준비에 ${Math.max(...slow.map((x) => x.p.lead_days))}일 걸려요)` : ""}${shop.closed_days_text ? ` (${shop.closed_days_text}요일 제외)` : ""}. 비워 두면 가장 빠른 날로 보내 드려요.`
             )
           }
         >
-          <Input type="date" min={shop.min_due_date} value={due} onChange={(e) => { setDue(e.target.value); setErrors((x) => ({ ...x, due: undefined })); }} />
+          <Input type="date" min={minDue} value={due} onChange={(e) => { setDue(e.target.value); setErrors((x) => ({ ...x, due: undefined })); }} />
         </Field>
       </div>
       <Field label="요청사항">

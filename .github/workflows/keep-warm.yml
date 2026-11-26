@@ -8,7 +8,7 @@ name: keep-warm
 
 on:
   schedule:
-    - cron: "*/10 22-23 * * 0-5"   # KST 07~08시 (UTC 전날 22~23시, 일~금)
+    - cron: "*/10 21-23 * * 0-5"   # KST 06~08시 (UTC 전날 21~23시, 일~금) — 7시 브리핑 전에 깨워 둠
     - cron: "*/10 0-9 * * 1-6"     # KST 09~18시 (UTC 0~9시, 월~토)
   workflow_dispatch:
 
