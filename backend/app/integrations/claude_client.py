@@ -69,6 +69,25 @@ class ClaudeClient:
         raise ClaudeUnavailable("AI 응답에 주문 정보가 없어요.")
 
 
+    def complete(self, *, system: str, user: str, max_tokens: int = 400, timeout: float = 3.5) -> str:
+        """짧은 글 답변 (챗봇용). 시간 안에 못 하면 ClaudeUnavailable — 재시도 없음."""
+        if not self.enabled:
+            raise ClaudeUnavailable("ANTHROPIC_API_KEY 가 설정되지 않았어요.")
+        client = self._client
+        if hasattr(client, "with_options"):
+            client = client.with_options(timeout=timeout, max_retries=0)
+        try:
+            resp = client.messages.create(
+                model=self.model, max_tokens=max_tokens, system=system, messages=[{"role": "user", "content": user}]
+            )
+        except Exception as e:  # noqa: BLE001
+            raise ClaudeUnavailable(str(e)) from e
+        text = "".join(getattr(b, "text", "") for b in getattr(resp, "content", []) or [] if getattr(b, "type", None) == "text")
+        if not text.strip():
+            raise ClaudeUnavailable("빈 답변")
+        return text.strip()
+
+
 def _status(e: Exception) -> int | None:
     code = getattr(e, "status_code", None)
     if code is None:

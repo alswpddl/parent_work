@@ -32,6 +32,7 @@ KNOWN_MODULES: list[str] = [
     "q1_shipping",
     "q2_self_order",
     "q2_web_order",
+    "q2_kakao_bot",
     "q2_briefing",
     "q3_tracking",
     "q3_notify",

@@ -663,6 +663,36 @@ function GoogleCard({ g }: { g: SystemStatus["google"] }) {
   );
 }
 
+const BOT_GUIDE_URL = "https://github.com/alswpddl/parent_work/blob/main/docs/카카오톡_챗봇_가이드.md";
+
+function KakaoBotCard({ b }: { b: SystemStatus["kakao_bot"] }) {
+  const toast = useToast();
+  return (
+    <Card title="💬 카카오톡 채널 챗봇">
+      {b.enabled ? (
+        <>
+          <Alert tone="ok">
+            챗봇 서버가 켜져 있어요. {b.ai ? "모르는 질문은 AI가 짧게 답해요." : "AI 키가 없어서, 모르는 질문은 전화 안내로 답해요."}
+          </Alert>
+          <div className="mb-3 rounded-xl bg-white p-3">
+            <div className="text-sm text-stone-500">스킬 주소 — 카카오 챗봇 관리자센터 [스킬] 에 붙여넣기 (남에게 보여 주지 마세요)</div>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <span className="break-all font-mono text-sm">{b.skill_url}</span>
+              <CopyButton size="sm" text={b.skill_url} onCopied={(ok) => toast(ok ? "복사했어요." : "복사가 막혔어요.", ok ? "ok" : "error")} />
+            </div>
+          </div>
+        </>
+      ) : (
+        <Alert tone="info">아직 꺼져 있어요. Render 에 KAKAO_SKILL_KEY 를 넣으면 켜져요.</Alert>
+      )}
+      <p className="mb-2 text-sm text-stone-600">
+        손님이 공장 카카오톡 채널에 "택배비 얼마예요?", "명란 있어요?", "O-20261126-003 5678" 처럼 보내면 바로 답해요. 못 알아들은 질문은 [기록]에 '챗봇 질문'으로 남아요.
+      </p>
+      <a href={BOT_GUIDE_URL} target="_blank" rel="noreferrer"><Button size="sm" variant="soft">연결 방법</Button></a>
+    </Card>
+  );
+}
+
 function SystemTab() {
   const s = useAsync(getSystemStatus, []);
   return (
@@ -671,6 +701,7 @@ function SystemTab() {
       {s.data && (
         <>
           <GoogleCard g={s.data.google} />
+          {s.data.kakao_bot && <KakaoBotCard b={s.data.kakao_bot} />}
           <Card title="연결 상태">
             <p className="mb-2">데이터 저장소: <b>{s.data.sheets_backend === "gspread" ? "구글 시트" : "메모리 (연습용 · 서버 끄면 사라짐)"}</b></p>
             {s.data.config_problems.map((p) => (

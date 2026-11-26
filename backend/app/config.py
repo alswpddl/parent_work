@@ -52,6 +52,7 @@ ALL_MODULES = [
     "q1_shipping",
     "q2_self_order",
     "q2_web_order",
+    "q2_kakao_bot",
     "q2_briefing",
     "q3_tracking",
     "q3_notify",
@@ -69,6 +70,7 @@ class AppConfig(BaseModel):
     # --- 공개 주소 (카카오 링크·리다이렉트·거래처 주문 링크에 사용) ---
     public_web_url: str = "http://localhost:5173"  # 프론트(Vercel) 주소
     public_api_url: str = "http://localhost:8000"  # 백엔드(Render) 주소
+    kakao_skill_key: str = ""  # 카카오톡 챗봇 스킬 주소에 붙는 비밀 키 (비우면 챗봇 꺼짐)
 
     # --- Google Sheets ---
     sheets_backend: Literal["memory", "gspread"] = "memory"
@@ -185,6 +187,7 @@ class AppConfig(BaseModel):
             sheets_cache_ttl=float(g("SHEETS_CACHE_TTL", "30")),
             auto_init_sheets=_bool(g("AUTO_INIT_SHEETS"), True),
             seed_demo_data=_bool(g("SEED_DEMO_DATA"), True),
+            kakao_skill_key=g("KAKAO_SKILL_KEY", ""),
             anthropic_api_key=g("ANTHROPIC_API_KEY", ""),
             claude_model=g("CLAUDE_MODEL", "claude-haiku-5-5"),
             claude_timeout=float(g("CLAUDE_TIMEOUT", "30")),
