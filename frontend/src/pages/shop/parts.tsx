@@ -1,7 +1,7 @@
 // 웹 주문서 화면 조각들
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Search } from "lucide-react";
-import { Button, Field, Input, Modal, cx } from "../../components/ui";
+import { Button, CopyButton, Field, Input, Modal, cx } from "../../components/ui";
 import { formatAddress, loadPostcode } from "../../lib/postcode";
 
 // ---------------------------------------------------------------- 상품 그림
@@ -103,23 +103,64 @@ export const joinAddress = (a: Address) => `${a.base} ${a.detail}`.trim();
 
 // ---------------------------------------------------------------- 주문 상태
 export const STATUS: Record<string, { label: string; tone: "violet" | "amber" | "green" | "red"; step: number }> = {
-  접수: { label: "주문 확인·준비 중", tone: "violet", step: 1 },
+  접수: { label: "주문 접수", tone: "violet", step: 1 },
   출고대기: { label: "포장 끝, 곧 보내요", tone: "amber", step: 2 },
   출고완료: { label: "보냈어요", tone: "green", step: 3 },
   취소: { label: "취소된 주문", tone: "red", step: 0 },
 };
 
-export function StatusSteps({ status }: { status: string }) {
-  const step = STATUS[status]?.step ?? 1;
-  if (!step) return null;
+/** 진행 단계: 주문 접수 → 입금 확인 → 포장 → 출발 (지난 단계는 색칠) */
+export function StatusSteps({ status, paid }: { status: string; paid?: boolean }) {
+  const base = STATUS[status]?.step ?? 1;
+  if (!base) return null;
+  const done = base === 1 ? (paid ? 2 : 1) : base + 1; // 포장(출고대기)·출발(출고완료)이면 입금까지 지난 것
   return (
-    <ol className="grid grid-cols-3 gap-1 text-center text-sm font-semibold">
-      {["접수", "포장", "출발"].map((label, i) => (
-        <li key={label} className={cx("border-b-4 py-1.5", i < step ? "border-brand text-brand" : "border-line text-stone-400")}>
+    <ol className="grid grid-cols-4 gap-1 text-center text-[13px] font-semibold">
+      {["주문 접수", "입금 확인", "포장", "출발"].map((label, i) => (
+        <li key={label} className={cx("border-b-4 py-1.5", i < done ? "border-brand text-brand" : "border-line text-stone-400")}>
           {label}
         </li>
       ))}
     </ol>
+  );
+}
+
+/** 입금 상태 — 확인 전은 빨강, 확인되면 초록 (취소된 주문은 표시 안 함) */
+export function PayStatus({ paid, status, className }: { paid: boolean; status: string; className?: string }) {
+  if (status === "취소") return null;
+  return paid ? (
+    <span className={cx("inline-flex items-center gap-1 whitespace-nowrap font-bold text-green-700", className)}>
+      <span className="h-2 w-2 rounded-full bg-green-600" aria-hidden />입금 완료
+    </span>
+  ) : (
+    <span className={cx("inline-flex items-center gap-1 whitespace-nowrap font-bold text-red-600", className)}>
+      <span className="h-2 w-2 rounded-full bg-red-600" aria-hidden />입금 확인 전
+    </span>
+  );
+}
+
+/** 입금 안 된 주문에 보여 주는 '이렇게 입금해 주세요' 상자 */
+export function PayGuide({ amount, account, note }: { amount: number | null; account: string; note?: string }) {
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+      <div className="font-bold text-red-700">입금해 주시면 바로 준비해요</div>
+      <dl className="mt-2 space-y-1 text-[15px]">
+        <div className="flex gap-3">
+          <dt className="w-16 shrink-0 text-stone-500">금액</dt>
+          <dd className="font-bold">{amount !== null ? `${amount.toLocaleString("ko-KR")}원` : note || "확인 후 안내해 드려요"}</dd>
+        </div>
+        <div className="flex gap-3">
+          <dt className="w-16 shrink-0 text-stone-500">계좌</dt>
+          <dd className="min-w-0 break-keep font-bold">{account || "공장에서 문자로 알려 드려요"}</dd>
+        </div>
+      </dl>
+      {account && (
+        <div className="mt-2">
+          <CopyButton size="sm" label="계좌 복사" text={account} />
+        </div>
+      )}
+      <p className="mt-2 break-keep text-sm text-stone-600">입금자명은 주문하신 분 성함으로 해 주세요.</p>
+    </div>
   );
 }
 

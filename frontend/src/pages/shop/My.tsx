@@ -6,9 +6,9 @@ import { errorMessage } from "../../api/client";
 import { shopChangePassword, shopLogin, shopMyOrders, shopSignup, shopUpdateMe } from "../../api/endpoints";
 import type { MyOrder } from "../../api/types";
 import { useToast } from "../../components/Toast";
-import { Alert, Badge, Button, Empty, Field, Input, Segmented, Spinner, cx } from "../../components/ui";
+import { Alert, Button, Empty, Field, Input, Segmented, Spinner, cx } from "../../components/ui";
 import { won } from "../../lib/format";
-import { AddressField, STATUS, StatusSteps, joinAddress, trackUrl, type Address } from "./parts";
+import { AddressField, PayGuide, PayStatus, STATUS, StatusSteps, joinAddress, trackUrl, type Address } from "./parts";
 import { MOBILE_RE, digits, formatPhone, useShop } from "./store";
 
 export default function My() {
@@ -205,15 +205,15 @@ function Orders() {
       {list.map((o) => {
         const st = STATUS[o.status] ?? { label: o.status, tone: "violet" as const, step: 1 };
         return (
-          <div key={o.order_id} className="rounded-2xl border border-line bg-white p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="text-sm text-stone-500">{o.created_at} · {o.order_id}</div>
-                <div className="font-extrabold">받는 날 {o.due_date}</div>
-              </div>
-              <Badge tone={st.tone}>{st.label}</Badge>
+          <div key={o.order_id} className={cx("rounded-lg border bg-white p-4", !o.paid && o.status !== "취소" ? "border-red-200" : "border-line")}>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className={cx("text-lg font-extrabold", o.status === "취소" ? "text-stone-400" : "text-brand-dark")}>{st.label}</span>
+              <PayStatus paid={o.paid} status={o.status} />
             </div>
-            {o.status !== "취소" && <div className="mt-3"><StatusSteps status={o.status} /></div>}
+            <div className="mt-0.5 text-sm text-stone-500">
+              주문 {o.created_at} · 받는 날 {o.due_date} · {o.order_id}
+            </div>
+            {o.status !== "취소" && <div className="mt-3"><StatusSteps status={o.status} paid={o.paid} /></div>}
             <ul className="mt-3 space-y-0.5">
               {o.lines.map((l) => (
                 <li key={l.sku + l.name} className="flex justify-between gap-2">
@@ -228,10 +228,12 @@ function Orders() {
                 {o.ship_method}
                 {o.shipping_fee > 0 && ` · 택배비 ${won(o.shipping_fee)}`}
               </span>
-              {o.total !== null && <b>{won(o.total)}</b>}
+              {o.total !== null && <b>합계 {won(o.total)}</b>}
             </div>
-            {o.status !== "취소" && (
-              <div className="mt-1 text-sm">{o.paid ? <span className="text-brand-dark">입금 확인됐어요</span> : <span className="text-amber-700">입금 확인 전이에요</span>}</div>
+            {!o.paid && o.status !== "취소" && (
+              <div className="mt-3">
+                <PayGuide amount={o.total} account={s.info?.bank_account ?? ""} />
+              </div>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button size="sm" variant="soft" icon={<RotateCcw className="h-4 w-4" />} onClick={() => reorder(o)}>다시 주문하기</Button>
