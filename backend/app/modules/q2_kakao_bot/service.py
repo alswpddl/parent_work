@@ -16,7 +16,8 @@ from ...core.errors import AppError
 from ...core.timeutil import fmt_date_ko
 from ...schemas.settings import WEEKDAYS_KO, closed_weekdays
 
-ORDER_ID_RE = re.compile(r"[Oo]-?\s?(\d{8})-?\s?(\d{3})")
+# 새 형식 20261126-K7Q3 (소문자·띄어쓰기도 허용) + 예전 형식 O-20261126-003
+ORDER_ID_RE = re.compile(r"(?:[Oo]-?\s?(\d{8})-?\s?(\d{3})(?!\d))|(?<!\d)(\d{8})\s?-\s?([2-9A-HJKMNP-Za-hjkmnp-z]{4})(?![0-9A-Za-z])")
 QUICK = ["상품·가격", "주문하기", "택배비", "받는 날", "주문 조회", "입금 계좌", "전화 연결"]
 
 # 질문 종류 → 알아듣는 말 (앞에 있을수록 먼저)
@@ -232,12 +233,12 @@ class KakaoBot:
         tail = re.findall(r"(?<!\d)(\d{4})(?!\d)", ORDER_ID_RE.sub(" ", text))
         if not m or not tail:
             return respond(
-                text_out("📦 주문번호와 휴대폰 번호 뒤 4자리를 같이 보내 주세요.\n예) O-20261126-003 5678\n\n가입하셨으면 주문서 마이페이지에서 모든 주문을 볼 수 있어요."),
+                text_out("📦 주문번호와 휴대폰 번호 뒤 4자리를 같이 보내 주세요.\n예) 20261126-K7Q3 5678\n\n가입하셨으면 주문서 마이페이지에서 모든 주문을 볼 수 있어요."),
                 card_out("마이페이지", "로그인하면 주문 내역·입금·송장을 한 번에 봐요.", [
                     {"label": "마이페이지", "action": "webLink", "webLinkUrl": self._shop_url("/my")},
                 ]),
             )
-        oid = f"O-{m.group(1)}-{m.group(2)}"
+        oid = f"O-{m.group(1)}-{m.group(2)}" if m.group(1) else f"{m.group(3)}-{m.group(4).upper()}"
         key = "kakao:" + hashlib.sha256(user.encode()).hexdigest()[:16] if user else "kakao"
         try:
             o = self.ctx.services["web_order"].lookup(oid, tail[-1], key)

@@ -30,8 +30,11 @@ def test_bad_setting_value_falls_back(ctx, backend):
 
 
 def test_ids():
-    assert next_order_id(["O-20261118-001", "O-20261118-009", "O-20261117-050"], BASE_DAY) == "O-20261118-010"
-    assert next_order_id([], BASE_DAY) == "O-20261118-001"
+    import re
+
+    oid = next_order_id(["O-20261118-001"], BASE_DAY)
+    assert re.fullmatch(r"20261118-[2-9A-HJKMNP-Z]{4}", oid)
+    assert len({next_order_id([], BASE_DAY) for _ in range(50)}) > 40  # 매번 다른 번호
     assert next_seq_id(["C0001", "C0010", "X"], "C") == "C0011"
 
 

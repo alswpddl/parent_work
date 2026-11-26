@@ -17,7 +17,7 @@ from ..core.ids import next_order_id
 from ..core.timeutil import now, today
 from ..repositories.customers import CustomerRepo
 from ..repositories.logs import LogRepo
-from ..repositories.orders import OrderRepo, to_order_out
+from ..repositories.orders import OrderRepo, order_total, to_order_out
 from ..repositories.products import ProductRepo
 from ..repositories.settings import SettingsRepo
 from ..schemas.common import OPEN_STATUSES
@@ -278,6 +278,7 @@ class OrderService:
             "shipping_fee": body.shipping_fee or None,
         }
 
+        header["order_total"] = order_total(lines_data, header["shipping_fee"])
         with self._id_lock:
             order_id = next_order_id(self.orders.all_ids(fresh=True), today())
             rows = []
@@ -361,6 +362,21 @@ class OrderService:
                 deletes.append((order_id, ol["line_no"]))
         else:
             final_lines = old_lines
+            # 주문 뒤에 품목 가격을 넣었으면, 주문을 고칠 때 빈 가격을 채운다
+            if current.status not in ("출고완료", "취소"):
+                retail = current.source == "웹주문서"
+                filled = []
+                for ol in old_lines:
+                    p = pmap.get(ol.get("sku") or "")
+                    if p is not None and ol.get("unit_price") in (None, "") and ol.get("qty"):
+                        nf = self._line_fields(p, int(ol["qty"]), retail)
+                        if nf["unit_price"] is not None:
+                            price = {"unit_price": nf["unit_price"], "amount": nf["amount"]}
+                            updates.append(((order_id, ol["line_no"]), price))
+                            filled.append({**ol, **price})
+                            continue
+                    filled.append(ol)
+                final_lines = filled
 
         closed = current.status in ("출고완료", "취소")
         if not closed:
@@ -374,6 +390,7 @@ class OrderService:
                 header["ship_method"], header["method_by"] = m, by
 
         header["updated_at"] = now()
+        header["order_total"] = order_total(final_lines, header.get("shipping_fee", current.shipping_fee))
 
         # 헤더 값은 모든 라인에 같이 쓴다
         upd_index = {k: ch for k, ch in updates}

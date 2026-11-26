@@ -57,7 +57,9 @@ def test_draft_unknown_item_and_customer_warn(ctx):
 # ---------------------------------------------------------------- 생성
 def test_create_writes_one_row_per_line(ctx, backend, events):
     o = _create(ctx, [("SES-18L", 10), ("CHI-5KG", 2)], customer_id="C0001", due_date=date(2026, 11, 20))
-    assert o.order_id.endswith("-001")
+    import re
+
+    assert re.fullmatch(r"\d{8}-[2-9A-HJKMNP-Z]{4}", o.order_id)
     assert [l.line_no for l in o.lines] == [1, 2]
     assert o.recipient == "김사장" and o.phone == "010-1234-5678"
     assert o.total_amount == 10 * 38000 + 2 * 95000
@@ -70,7 +72,7 @@ def test_create_writes_one_row_per_line(ctx, backend, events):
     assert events[0][0] == "order.created"
 
     o2 = _create(ctx, [("PER-18L", 1)], customer_id="C0001")
-    assert o2.order_id.endswith("-002")
+    assert o2.order_id != o.order_id and o2.order_id[:8] == o.order_id[:8]
 
 
 def test_customer_default_truck(ctx):
@@ -183,3 +185,18 @@ def test_list_and_production_summary(ctx):
 
     s = ctx.orders.production_summary(until=date(2026, 11, 21))
     assert {l.sku: l.qty for l in s.lines} == {"SES-18L": 10}
+
+
+
+def test_order_total_column_and_price_refill(ctx, backend):
+    """주문장 '주문합계' 칸 + 주문 뒤에 넣은 가격이 주문을 고칠 때 채워짐"""
+    o = _create(ctx, [("SES-18L", 10), ("CHI-5KG", 2)], customer_id="C0001", due_date=date(2026, 11, 20))
+    rows = ctx.orders.orders.lines_of(o.order_id, fresh=True)
+    assert all(r.get("order_total") == o.total_amount for r in rows)
+    # 가격 지우고 → 수정 저장하면 다시 채움
+    for r in rows:
+        ctx.orders.orders.update_many([((o.order_id, r["line_no"]), {"unit_price": None, "amount": None})])
+    from app.schemas.order import OrderPatch
+
+    o2 = ctx.orders.update(o.order_id, OrderPatch(note="가격 채우기"))
+    assert o2.total_amount == o.total_amount

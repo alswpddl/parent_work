@@ -14,8 +14,21 @@ HEADER_FIELDS = (
     "created_at", "source", "customer_id", "customer_name", "order_kg", "ship_method", "method_by",
     "recipient", "phone", "address", "zipcode", "due_date", "note", "status", "shipped_at",
     "carrier", "tracking_no", "truck_no", "driver_phone", "notified_at", "ext_order_no",
-    "stock_deducted", "settlement_id", "updated_at", "shipping_fee", "paid_at",
+    "stock_deducted", "settlement_id", "updated_at", "shipping_fee", "paid_at", "order_total",
 )
+
+
+def order_total(lines: list[dict[str, Any]], shipping_fee: int | None) -> int | None:
+    """주문장 '주문합계' 칸: 품목 금액 합 + 배송비. 가격이 빈 품목이 있으면 None (빈칸)"""
+    total = 0
+    if not lines:
+        return None
+    for l in lines:
+        a = l.get("amount")
+        if a is None or a == "":
+            return None
+        total += int(a)
+    return total + int(shipping_fee or 0)
 
 
 class OrderRepo(Repository[OrderOut]):
