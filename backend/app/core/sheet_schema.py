@@ -150,6 +150,7 @@ PRODUCTS = TabSpec(
         C("description", "설명", quarter=2),
         C("shop_visible", "주문서노출", "bool", quarter=2),
         C("sold_out", "품절", "bool", quarter=2),
+        C("lead_days", "준비일", "int", quarter=2),  # 주문 후 며칠 뒤부터 받을 수 있나 (비우면 _설정 기본값)
         C("image_url", "사진주소", quarter=2),
         C("tax_type", "과세구분", quarter=4),
         C("container_item", "용기자재", quarter=4),

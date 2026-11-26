@@ -92,6 +92,7 @@ function Shell() {
         {page.name === "lookup" && <Lookup />}
         <footer className="mt-12 space-y-0.5 text-center text-xs text-stone-400">
           <div>{s.info.factory_name}{s.info.factory_phone && ` · ${s.info.factory_phone}`}</div>
+          {s.info.contact_hours && <div>문의 {s.info.contact_hours}</div>}
         </footer>
       </main>
 
@@ -170,9 +171,9 @@ function Home() {
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
         <InfoChip icon="🚚" title="택배비" text={shipText} />
-        <InfoChip icon="📅" title="받는 날" text={`${dateKo(info.min_due_date)}부터${info.closed_days_text ? ` · ${info.closed_days_text}요일 휴무` : ""}`} />
+        <InfoChip icon="📅" title="받는 날" text={`${dateKo(info.min_due_date)}부터${new Set(info.products.map((p) => p.lead_days)).size > 1 ? " (품목마다 달라요)" : ""}${info.closed_days_text ? ` · ${info.closed_days_text}요일 휴무` : ""}`} />
         <InfoChip icon="💳" title="결제" text="계좌 입금 (주문 후 안내)" />
-        <InfoChip icon="☎️" title="문의" text={info.factory_phone || "-"} href={info.factory_phone ? telHref(info.factory_phone) : undefined} />
+        <InfoChip icon="☎️" title="문의" text={[info.factory_phone || "-", info.contact_hours].filter(Boolean).join(" · ")} href={info.factory_phone ? telHref(info.factory_phone) : undefined} />
       </div>
 
       <div id="products" className="scroll-mt-16" />
@@ -279,6 +280,7 @@ function Item({ name }: { name: string }) {
                 <div>
                   <div className="text-xl font-extrabold">{v.spec || v.unit}</div>
                   {v.price !== null && <div className="font-bold text-brand-dark">{won(v.price)} <span className="text-sm font-normal text-stone-500">/ 1{v.unit}</span></div>}
+                  {!v.sold_out && <div className="text-sm text-stone-500">📅 {v.lead_days ? `주문 ${v.lead_days}일 뒤부터 받아요` : "오늘 보내 드려요"}</div>}
                   {inCart > 0 && <div className="text-sm text-stone-500">장바구니에 {inCart}{v.unit} 있어요</div>}
                 </div>
                 {v.sold_out && <Badge tone="red">품절</Badge>}

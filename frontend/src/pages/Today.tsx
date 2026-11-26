@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Circle, Globe, Printer, Truck } from "lucide-react";
-import { listOrders, stockNeeds, updateOrder } from "../api/endpoints";
+import { getSettings, listOrders, stockNeeds, updateOrder } from "../api/endpoints";
 import type { Order } from "../api/types";
 import { useToast } from "../components/Toast";
 import { Alert, Badge, Button, Card, Empty, LoadState, MethodBadge, PageHeader, Segmented, cx } from "../components/ui";
@@ -33,6 +33,7 @@ export default function Today() {
     () => (has("q4_inventory") ? stockNeeds(range === "today" ? todayIso() : range === "tomorrow" ? todayIso(1) : undefined) : Promise.resolve([])),
     [range],
   );
+  const settings = useAsync(() => getSettings().catch(() => null), []);
   useAutoRefresh(() => Promise.all([list.refresh(), needs.refresh()]));
   const all = useMemo(() => list.data ?? [], [list.data]);
   const today = todayIso();
@@ -62,6 +63,11 @@ export default function Today() {
 
   const ready = orders.filter((o) => o.status === "출고대기").length;
   const totalKg = orders.reduce((a, o) => a + o.order_kg, 0);
+  // 하루 최대 작업량 — 아직 안 만든(접수) 주문 무게가 넘치면 경고
+  const capacity = settings.data?.daily_capacity_kg ?? 0;
+  const days = range === "today" ? 1 : range === "tomorrow" ? 2 : 0;
+  const leftKg = orders.filter((o) => o.status === "접수").reduce((a, o) => a + o.order_kg, 0);
+  const overCapacity = capacity > 0 && days > 0 && leftKg > capacity * days;
 
   const toggle = (o: Order) =>
     run(o.order_id, async () => {
@@ -104,6 +110,12 @@ export default function Today() {
           {orders.some(needsPayment) && (
             <Alert tone="warn" action={<Link to="/orders"><Button size="sm" variant="ghost">주문 목록</Button></Link>}>
               💰 입금 확인 안 된 웹 주문 {orders.filter(needsPayment).length}건 — 입금 확인 후 보내 주세요. (주문 목록에서 눌러 [입금 확인])
+            </Alert>
+          )}
+          {overCapacity && (
+            <Alert tone="warn">
+              ⚖️ {range === "today" ? "오늘" : "내일"}까지 남은 작업 {kg(leftKg)} — 하루 최대 {kg(capacity)}
+              {days > 1 ? ` × ${days}일` : ""}보다 많아요. 미리 만들어 두거나 받는 날을 조정해 주세요.
             </Alert>
           )}
           {range !== "all" && undated > 0 && (

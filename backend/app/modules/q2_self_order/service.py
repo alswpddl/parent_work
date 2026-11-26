@@ -18,10 +18,10 @@ from pydantic import BaseModel, Field
 
 from ...core.errors import NotFoundError, TooManyRequests, ValidationFailed
 from ...core.ids import random_token
-from ...core.timeutil import fmt_date_ko, today
+from ...core.timeutil import fmt_date_ko, now, today
 from ...schemas.customer import CustomerOut
 from ...schemas.order import OrderCreate, OrderItemIn, OrderOut
-from ...schemas.settings import WEEKDAYS_KO, closed_weekdays
+from ...schemas.settings import WEEKDAYS_KO, closed_weekdays, in_quiet_hours
 
 
 # ---------------------------------------------------------------- 입출력 모델
@@ -37,6 +37,7 @@ class FormProduct(BaseModel):
     spec: str
     unit: str
     display_name: str
+    lead_days: int = 1  # 주문 후 며칠 뒤부터 받을 수 있나
 
 
 class FormFavorite(BaseModel):
@@ -88,15 +89,21 @@ def to_public(o: OrderOut) -> PublicOrderOut:
     )
 
 
-def _min_due(st) -> date:
+def lead_for(st, products: list | None = None) -> int:
+    """주문에 든 품목 중 가장 오래 걸리는 준비일 (품목 '준비일' 칸, 비면 _설정 기본값)"""
+    days = [p.lead_days if p.lead_days is not None else st.self_order_lead_days for p in (products or [])]
+    return max(days) if days else st.self_order_lead_days
+
+
+def _min_due(st, products: list | None = None) -> date:
     """준비일만큼 뒤 + 쉬는 요일이면 다음 날로."""
-    d = today() + timedelta(days=st.self_order_lead_days)
+    d = today() + timedelta(days=lead_for(st, products))
     closed = closed_weekdays(st.closed_days)
     for _ in range(7):
         if d.weekday() not in closed:
             return d
         d += timedelta(days=1)
-    return today() + timedelta(days=st.self_order_lead_days)
+    return today() + timedelta(days=lead_for(st, products))
 
 
 class _Limiter:
@@ -160,7 +167,10 @@ class SelfOrderService:
         c = self.customer_by_token(token)
         st = self.ctx.settings.load()
         products = [
-            FormProduct(sku=p.sku, name=p.name, spec=p.spec, unit=p.unit, display_name=p.display_name)
+            FormProduct(
+                sku=p.sku, name=p.name, spec=p.spec, unit=p.unit, display_name=p.display_name,
+                lead_days=lead_for(st, [p]),
+            )
             for p in self.ctx.products.list()
         ]
         active_skus = {p.sku for p in products}
@@ -182,9 +192,10 @@ class SelfOrderService:
         c = self.customer_by_token(token)
         self.order_limiter.hit(token)
         st = self.ctx.settings.load()
-        min_due = _min_due(st)
+        pmap = self.ctx.products.map()
+        min_due = _min_due(st, [pmap[i.sku] for i in body.items if i.sku in pmap])
         if body.due_date and body.due_date < min_due:
-            raise ValidationFailed(f"받는 날짜는 {fmt_date_ko(min_due)} 이후로 골라 주세요.")
+            raise ValidationFailed(f"받는 날짜는 {fmt_date_ko(min_due)} 이후로 골라 주세요. (품목 준비 기간)")
         if body.due_date and body.due_date.weekday() in closed_weekdays(st.closed_days):
             raise ValidationFailed(f"{WEEKDAYS_KO[body.due_date.weekday()]}요일은 택배가 쉬어요. 다른 날을 골라 주세요.")
         order = self.ctx.orders.create(
@@ -211,8 +222,11 @@ class SelfOrderService:
         o: OrderOut = payload["order"]
         if o.source not in ("셀프주문", "웹주문서"):
             return
-        if not self.ctx.settings.load().notify_new_self_order:
+        st = self.ctx.settings.load()
+        if not st.notify_new_self_order:
             return
+        if in_quiet_hours(st.quiet_hours, now()):
+            return  # 밤에는 깨우지 않고 아침 브리핑 '밤사이 들어온 주문'에 모아서 알려요
         items = ", ".join(f"{l.product_name} {l.qty}" for l in o.lines)
         text = (
             f"🛒 새 {'웹 주문' if o.source == '웹주문서' else '셀프주문'}\n{o.customer_name}"

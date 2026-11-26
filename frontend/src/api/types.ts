@@ -64,6 +64,9 @@ export interface AppSettings {
   shop_shipping_fee: number;
   shop_free_shipping_over: number;
   closed_days: string;
+  contact_hours: string;
+  quiet_hours: string;
+  daily_capacity_kg: number;
 }
 
 export interface Customer {
@@ -103,6 +106,7 @@ export interface Product {
   description: string;
   shop_visible: boolean;
   sold_out: boolean;
+  lead_days: number | null;
   image_url: string;
   tax_type: "과세" | "면세" | "";
   container_item: string;
@@ -474,6 +478,7 @@ export interface ShopProduct {
   description: string;
   sold_out: boolean;
   image_url: string;
+  lead_days: number;
 }
 
 export interface ShopInfo {
@@ -481,6 +486,7 @@ export interface ShopInfo {
   factory_phone: string;
   notice: string;
   intro: string;
+  contact_hours: string;
   show_prices: boolean;
   bank_account: string;
   min_due_date: string;

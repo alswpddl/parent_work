@@ -35,7 +35,7 @@ from ...core.timeutil import fmt_date_ko, now, today
 from ...schemas.customer import CustomerOut
 from ...schemas.order import OrderCreate, OrderItemIn, OrderOut
 from ...schemas.settings import WEEKDAYS_KO, AppSettings, closed_weekdays
-from ..q2_self_order.service import PublicOrderOut, to_public
+from ..q2_self_order.service import PublicOrderOut, lead_for, to_public
 from .accounts import check_password, hash_password, issue_token, read_token, token_matches
 
 MOBILE_RE = re.compile(r"^01[016789]\d{7,8}$")
@@ -78,6 +78,7 @@ class ShopProduct(BaseModel):
     description: str
     sold_out: bool = False
     image_url: str = ""
+    lead_days: int = 1  # 주문 후 며칠 뒤부터 받을 수 있나
 
 
 class ShopInfo(BaseModel):
@@ -85,6 +86,7 @@ class ShopInfo(BaseModel):
     factory_phone: str
     notice: str
     intro: str = ""
+    contact_hours: str = ""
     show_prices: bool
     bank_account: str
     min_due_date: date
@@ -276,8 +278,8 @@ class WebOrderService:
     def _visible_products(self) -> list:
         return [p for p in self.ctx.products.list() if p.shop_visible]
 
-    def _min_due(self, st: AppSettings) -> date:
-        return first_open_day(today() + timedelta(days=st.self_order_lead_days), closed_weekdays(st.closed_days))
+    def _min_due(self, st: AppSettings, products: list | None = None) -> date:
+        return first_open_day(today() + timedelta(days=lead_for(st, products)), closed_weekdays(st.closed_days))
 
     def info(self) -> ShopInfo:
         st = self.ctx.settings.load()
@@ -289,6 +291,7 @@ class WebOrderService:
             factory_phone=st.factory_phone,
             notice=st.shop_notice,
             intro=st.shop_intro,
+            contact_hours=st.contact_hours,
             show_prices=st.shop_show_prices,
             bank_account=st.bank_account,
             min_due_date=self._min_due(st),
@@ -304,7 +307,7 @@ class WebOrderService:
                 ShopProduct(
                     sku=p.sku, name=p.name, spec=p.spec, unit=p.unit, unit_kg=p.unit_kg,
                     price=p.shop_price if st.shop_show_prices else None, description=p.description,
-                    sold_out=p.sold_out, image_url=p.image_url,
+                    sold_out=p.sold_out, image_url=p.image_url, lead_days=lead_for(st, [p]),
                 )
                 for p in sorted(self._visible_products(), key=lambda p: (p.sold_out, p.name, p.unit_kg))
             ],
@@ -372,9 +375,9 @@ class WebOrderService:
             if p.sold_out:
                 raise ValidationFailed(f"{p.display_name}은(는) 지금 품절이에요. 빼고 주문해 주세요.")
         if body.due_date:
-            min_due = self._min_due(st)
+            min_due = self._min_due(st, [visible[i.sku] for i in body.items])
             if body.due_date < min_due:
-                raise ValidationFailed(f"받는 날은 {fmt_date_ko(min_due)} 이후로 골라 주세요.")
+                raise ValidationFailed(f"받는 날은 {fmt_date_ko(min_due)}부터 고를 수 있어요. (담으신 품목 준비 기간)")
             if body.due_date > today() + timedelta(days=90):
                 raise ValidationFailed("받는 날은 3개월 안으로 골라 주세요.")
             if body.due_date.weekday() in closed_weekdays(st.closed_days):

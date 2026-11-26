@@ -106,6 +106,7 @@ function BasicTab() {
         <div className="grid gap-x-3 md:grid-cols-2">
           {number("threshold_kg", "화물로 보낼 기준 무게 (kg 이상)")}
           {number("pallet_kg", "파레트 1개당 무게 (kg)")}
+          {number("daily_capacity_kg", "하루 최대 작업량 (kg)", "오늘의 할당량이 이보다 많으면 알려줘요. 0 이면 끔")}
         </div>
       </Card>
       <Card title="우리 공장 (상차지·보내는 분·명세서 공급자)">
@@ -129,6 +130,7 @@ function BasicTab() {
           {number("self_order_lead_days", "최소 준비일", "오늘로부터 며칠 뒤부터 받는 날로 고를 수 있어요")}
           {text("self_order_notice", "주문 화면 안내 문구")}
           <Toggle checked={v.notify_new_self_order} onChange={(x) => set({ notify_new_self_order: x })} label="셀프주문 들어오면 카톡으로 알려주기" />
+          {text("quiet_hours", "밤 알림 쉬는 시간", "예) 20:00-07:00 — 이 시간 주문은 바로 안 알리고 아침 브리핑에 모아서 알려요. 비우면 늘 바로")}
         </Card>
       )}
       {has("q2_web_order") && (
@@ -152,8 +154,9 @@ function BasicTab() {
             {number("shop_shipping_fee", "택배비 (원)", "0 이면 '택배비는 확인 후 안내'로 보여요")}
             {number("shop_free_shipping_over", "이 금액 이상이면 택배비 무료 (원)", "0 이면 무료 없음")}
           </div>
+          {text("contact_hours", "문의 받는 시간", "예) 오전 8시 ~ 오후 4시 — 주문서·챗봇에 보여요")}
           {text("closed_days", "받는 날로 못 고르는 요일", "예) 일 / 토,일 / 없음 — 거래처 주문 링크에도 똑같이 적용돼요")}
-          <p className="text-sm text-stone-500">받는 날은 위 '거래처 셀프 주문'의 최소 준비일을 같이 써요. 입금 계좌는 주문 완료 화면에 보여요.</p>
+          <p className="text-sm text-stone-500">받는 날은 품목마다 적은 '준비일'을 따르고, 비어 있으면 위 '거래처 셀프 주문'의 최소 준비일을 써요. 입금 계좌는 주문 완료 화면에 보여요.</p>
         </Card>
       )}
       <Card title="자동 알림">
@@ -404,7 +407,7 @@ function ProductsTab() {
           onSave={(v) =>
             run("save", async () => {
               const money = (x: unknown) => (x === null || x === undefined || String(x) === "" ? null : Number(x));
-              const body = { ...v, unit_kg: Number(v.unit_kg) || 0, units_per_box: v.units_per_box ? Number(v.units_per_box) : null, unit_price: money(v.unit_price), retail_price: money(v.retail_price) };
+              const body = { ...v, lead_days: v.lead_days === null || v.lead_days === undefined || String(v.lead_days) === "" ? null : Math.max(0, Math.round(Number(v.lead_days))), unit_kg: Number(v.unit_kg) || 0, units_per_box: v.units_per_box ? Number(v.units_per_box) : null, unit_price: money(v.unit_price), retail_price: money(v.retail_price) };
               if (v.sku && list.data?.some((p) => p.sku === v.sku)) await updateProduct(v.sku, body);
               else await createProduct(body);
               toast("저장했어요.");
@@ -471,6 +474,7 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
         {inp("unit_kg", "1개 무게 (kg, 포장 포함)", undefined, "number")}
         {inp("units_per_box", "한 박스에 몇 개", "택배 박스 수·박스 자재 계산", "number")}
         {inp("unit_price", "공급 단가 (원, 부가세 별도)", "월말 정산에 써요", "number")}
+        {inp("lead_days", "준비일 (주문 후 며칠)", "이 품목을 받을 수 있는 가장 빠른 날. 비우면 기본 준비일", "number")}
         {has("q2_web_order") && inp("retail_price", "개인 판매가 (원, 웹 주문서)", "비우면 공급 단가를 보여 줘요", "number")}
         {has("q4_settlement") && (
           <Field label="과세 구분">
