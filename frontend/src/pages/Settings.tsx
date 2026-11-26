@@ -702,7 +702,7 @@ function KakaoBotCard({ b }: { b: SystemStatus["kakao_bot"] }) {
         <Alert tone="warn">챗봇이 아직 꺼져 있어서 스킬 주소가 없어요. 서버(Render)에 KAKAO_SKILL_KEY 값이 있어야 켜져요.</Alert>
       )}
       <p className="mb-2 text-sm text-stone-600">
-        손님이 공장 카카오톡 채널에 "택배비 얼마예요?", "명란 있어요?", "O-20261126-003 5678" 처럼 보내면 바로 답해요. 못 알아들은 질문은 [기록]에 '챗봇 질문'으로 남아요.
+        손님이 공장 카카오톡 채널에 "택배비 얼마예요?", "명란 있어요?", "20261126-K7Q3 5678" 처럼 보내면 바로 답해요. 못 알아들은 질문은 [기록]에 '챗봇 질문'으로 남아요.
       </p>
       <a href={BOT_GUIDE_URL} target="_blank" rel="noreferrer"><Button size="sm" variant="soft">연결 방법</Button></a>
     </Card>

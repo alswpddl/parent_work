@@ -447,8 +447,8 @@ function Lookup() {
           <>비회원 주문은 주문번호로 찾아요. 가입하면 <Link to="/shop/my" className="font-bold text-brand underline">마이페이지</Link>에서 한 번에 볼 수 있어요.</>
         )}
       </p>
-      <Field label="주문번호" hint="주문 완료 화면에 나온 번호예요. 예) O-20261124-003">
-        <Input value={orderId} autoCapitalize="characters" placeholder="O-20261124-001" onChange={(e) => setOrderId(e.target.value.toUpperCase())} />
+      <Field label="주문번호" hint="주문 완료 화면에 나온 번호예요. 예) 20261126-K7Q3">
+        <Input value={orderId} autoCapitalize="characters" placeholder="20261126-K7Q3" onChange={(e) => setOrderId(e.target.value.toUpperCase())} />
       </Field>
       <Field label="주문할 때 쓴 휴대폰 번호 뒤 4자리">
         <Input value={phone4} inputMode="numeric" maxLength={4} placeholder="5678" onChange={(e) => setPhone4(digits(e.target.value))} />

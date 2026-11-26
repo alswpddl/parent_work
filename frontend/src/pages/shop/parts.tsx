@@ -99,7 +99,13 @@ function PostcodeEmbed({ onPick }: { onPick: (address: string, zipcode: string) 
   return <div ref={ref} className="h-[460px] w-full overflow-hidden rounded-xl border border-line" />;
 }
 
-export const joinAddress = (a: Address) => `${a.base} ${a.detail}`.trim();
+/** 주소 + 상세주소. 저장된 주소에 이미 상세주소가 들어 있으면 두 번 붙이지 않는다 ('403호 403호' 방지) */
+export const joinAddress = (a: Address) => {
+  const base = a.base.trim();
+  const detail = a.detail.trim();
+  if (!detail || base.endsWith(detail)) return base;
+  return `${base} ${detail}`;
+};
 
 // ---------------------------------------------------------------- 주문 상태
 export const STATUS: Record<string, { label: string; tone: "violet" | "amber" | "green" | "red"; step: number }> = {

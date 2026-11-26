@@ -14,6 +14,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from ...core.errors import ValidationFailed
+from ...core.ids import ORDER_ID_PATTERN
 from ...core.uploads import PreviewStore, cell_text, find_table, pick, read_rows
 from ...schemas.order import OrderOut
 
@@ -25,7 +26,7 @@ HINTS = {
     "phone": ["받는분전화번호", "받는분 전화", "수하인전화", "수하인전화번호", "수취인연락처", "수취인전화번호", "전화번호", "휴대폰", "연락처"],
     "order_id": ["주문번호", "고객주문번호", "참조번호", "주문 번호"],
 }
-ORDER_ID_RE = re.compile(r"O-\d{8}-\d{3}")
+ORDER_ID_RE = re.compile(ORDER_ID_PATTERN)
 
 
 class TrackingRow(BaseModel):

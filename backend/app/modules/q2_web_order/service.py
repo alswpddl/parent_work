@@ -451,7 +451,9 @@ class WebOrderService:
             # 실제 출고방식(거래처 기본값 반영)으로 안내를 다시 맞춘다
             fee, note = shipping_for(st, order.total_amount, order.ship_method)
             if order.ship_method == "화물" and order.shipping_fee:
-                order = self.ctx.orders.set_fields(order.order_id, {"shipping_fee": None}, publish=None)
+                order = self.ctx.orders.set_fields(
+                    order.order_id, {"shipping_fee": None, "order_total": order.total_amount}, publish=None
+                )
             show = st.shop_show_prices
             subtotal_out = order.total_amount if show else None
             out = GuestOrderOut(
