@@ -113,7 +113,7 @@ class ProductOut(ProductBase):
             retail_price=d.get("retail_price") if (d.get("retail_price") or 0) > 0 else None,
             sold_out=d.get("sold_out") is True,
             image_url=d.get("image_url") or "",
-            lead_days=d.get("lead_days") if isinstance(d.get("lead_days"), int) and d.get("lead_days") >= 0 else None,
+            lead_days=_lead(d.get("lead_days")),
             tax_type=tax if tax in ("과세", "면세") else "",  # type: ignore[arg-type]
             container_item=d.get("container_item") or "",
             box_item=d.get("box_item") or "",
@@ -125,3 +125,11 @@ class ProductOut(ProductBase):
 
     def alias_list(self) -> list[str]:
         return [a.strip() for a in self.aliases.replace("，", ",").split(",") if a.strip()]
+
+
+def _lead(v: object) -> int | None:
+    """시트 '준비일' 칸 → 0 이상 정수, 비었거나 이상하면 None (_설정 기본값 사용)"""
+    if isinstance(v, bool) or not isinstance(v, int):
+        return None
+    return v if 0 <= v <= 60 else None
+
