@@ -144,13 +144,13 @@ function MyPage() {
   const p = s.auth!.profile;
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3 rounded-3xl bg-gradient-to-br from-brand to-brand-dark p-5 text-white">
+      <div className="mb-4 flex items-end justify-between gap-3 border-b-2 border-brand pb-3">
         <div className="min-w-0">
-          <div className="text-sm opacity-90">{p.company || "마이페이지"}</div>
-          <div className="truncate text-2xl font-extrabold">{p.name}님</div>
-          <div className="text-sm opacity-90">{p.phone}</div>
+          {p.company && <div className="text-sm text-stone-500">{p.company}</div>}
+          <div className="truncate font-serif text-2xl font-bold text-brand-dark">{p.name}님</div>
+          <div className="text-sm text-stone-500">{p.phone}</div>
         </div>
-        <Button size="sm" variant="ghost" className="shrink-0 !border-white/70 !bg-transparent !text-white" icon={<LogOut className="h-4 w-4" />} onClick={() => { s.signOut(); nav("/shop"); }}>
+        <Button size="sm" variant="ghost" className="shrink-0" icon={<LogOut className="h-4 w-4" />} onClick={() => { s.signOut(); nav("/shop"); }}>
           로그아웃
         </Button>
       </div>
@@ -231,7 +231,7 @@ function Orders() {
               {o.total !== null && <b>{won(o.total)}</b>}
             </div>
             {o.status !== "취소" && (
-              <div className="mt-1 text-sm">{o.paid ? <span className="text-brand-dark">입금 확인됐어요 ✔</span> : <span className="text-amber-700">입금 확인 전이에요</span>}</div>
+              <div className="mt-1 text-sm">{o.paid ? <span className="text-brand-dark">입금 확인됐어요</span> : <span className="text-amber-700">입금 확인 전이에요</span>}</div>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button size="sm" variant="soft" icon={<RotateCcw className="h-4 w-4" />} onClick={() => reorder(o)}>다시 주문하기</Button>

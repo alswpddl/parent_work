@@ -39,17 +39,17 @@ export default function Home() {
       <LoadState loading={board.loading} error={board.error} onRetry={board.reload} />
       {board.data && (
         <div className="mb-4 grid grid-cols-3 gap-3">
-          <Link to="/shipping?tab=parcel" className="rounded-2xl bg-parcel p-4 text-white shadow-sm">
+          <Link to="/shipping?tab=parcel" className="rounded-lg bg-parcel p-4 text-white">
             <div className="text-sm opacity-90">📦 택배</div>
             <div className="text-4xl font-extrabold">{board.data.parcel.length}</div>
             <div className="text-sm opacity-90">{kg(board.data.parcel_kg)}</div>
           </Link>
-          <Link to="/shipping?tab=truck" className="rounded-2xl bg-truck p-4 text-white shadow-sm">
+          <Link to="/shipping?tab=truck" className="rounded-lg bg-truck p-4 text-white">
             <div className="text-sm opacity-90">🚚 화물</div>
             <div className="text-4xl font-extrabold">{board.data.truck.length}</div>
             <div className="text-sm opacity-90">{kg(board.data.truck_kg)}</div>
           </Link>
-          <div className={`rounded-2xl p-4 shadow-sm ${overdue.length ? "bg-red-600 text-white" : "bg-white"}`}>
+          <div className={`rounded-2xl p-4 ${overdue.length ? "bg-red-600 text-white" : "bg-white"}`}>
             <div className="whitespace-nowrap text-sm opacity-90">⏰ 늦은 주문</div>
             <div className="text-4xl font-extrabold">{overdue.length}</div>
             <div className="truncate text-sm opacity-90">{overdue.map((o) => o.customer_name).join(", ") || "없음"}</div>

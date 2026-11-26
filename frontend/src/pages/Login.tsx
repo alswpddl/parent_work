@@ -32,7 +32,7 @@ export default function Login({ onDone }: { onDone: () => void }) {
     setPin(next);
   };
 
-  const key = "flex h-20 items-center justify-center rounded-2xl bg-white text-3xl font-extrabold shadow-sm active:scale-95";
+  const key = "flex h-20 items-center justify-center rounded-2xl bg-white text-3xl font-extrabold active:scale-95";
   return (
     <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6 py-10">
       <div className="mb-8 text-center">
