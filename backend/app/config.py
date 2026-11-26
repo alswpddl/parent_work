@@ -242,10 +242,8 @@ class AppConfig(BaseModel):
     def integration_warnings(self) -> list[str]:
         """빠져도 서버는 뜨지만 기능이 꺼지는 설정 (상태 화면에 표시)."""
         w: list[str] = []
-        if not self.ai_enabled:
-            w.append("ANTHROPIC_API_KEY 없음 → 카톡 주문은 간단 규칙으로만 정리돼요.")
         if not self.kakao_enabled:
-            w.append("KAKAO_REST_API_KEY 없음 → 아침 브리핑·재고 경고 카톡이 꺼져 있어요.")
+            w.append("KAKAO_REST_API_KEY 없음 → 새 주문 알림·아침 브리핑·재고 경고 카톡이 꺼져 있어요.")
         if not self.solapi_enabled:
             w.append("솔라피 키/채널 없음 → 거래처 출고 알림톡이 꺼져 있어요.")
         else:
@@ -253,8 +251,6 @@ class AppConfig(BaseModel):
                 w.append("SOLAPI_TPL_PARCEL 없음 → 택배 출고 알림톡을 보낼 수 없어요.")
             if not self.solapi_tpl_truck:
                 w.append("SOLAPI_TPL_TRUCK 없음 → 화물 출고 알림톡을 보낼 수 없어요.")
-        if not self.smtp_enabled:
-            w.append("SMTP 설정 없음 → 거래명세표 이메일 발송이 꺼져 있어요.")
         if self.sheets_backend == "gspread" and not self.system_spreadsheet_id:
             w.append("SYSTEM_SPREADSHEET_ID 없음 → 카카오 토큰을 본 시트의 _토큰 탭에 저장해요 (부모님이 지우지 않게 주의).")
         return w
