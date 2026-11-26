@@ -81,7 +81,7 @@ export default function Inventory() {
       {bulk.length > 0 && (
         <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3">
           {bulk.map((i) => (
-            <button key={i.item_id} onClick={() => setAdjustFor(i)} className={`rounded-2xl p-4 text-left text-white shadow-sm ${i.status === "정상" ? "bg-brand" : i.status === "곧부족" ? "bg-amber-600" : "bg-red-600"}`}>
+            <button key={i.item_id} onClick={() => setAdjustFor(i)} className={`rounded-2xl p-4 text-left text-white ${i.status === "정상" ? "bg-brand" : i.status === "곧부족" ? "bg-amber-600" : "bg-red-600"}`}>
               <div className="truncate text-sm opacity-90">🫙 {i.name.replace(/\s*저장고$/, "")}</div>
               <div className="text-3xl font-extrabold">{num(i.stock)}<span className="ml-1 text-lg">{i.unit}</span></div>
               <div className="text-xs opacity-90">{i.days_left !== null ? `약 ${i.days_left}일분` : "저장고"}{i.status !== "정상" ? ` · ${i.status}` : ""}</div>

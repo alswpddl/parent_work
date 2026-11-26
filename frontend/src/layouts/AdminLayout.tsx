@@ -47,14 +47,14 @@ export default function AdminLayout({ onLogout }: { onLogout: () => void }) {
     <div className="min-h-screen md:flex">
       {/* 데스크톱 왼쪽 메뉴 */}
       <aside className="hidden w-60 shrink-0 flex-col bg-brand px-3 py-5 text-white md:flex">
-        <div className="mb-6 px-3 text-xl font-extrabold">🏭 공장 도우미</div>
+        <div className="mb-6 border-b border-white/15 px-3 pb-4 font-serif text-xl font-bold">공장 관리</div>
         <nav className="flex flex-1 flex-col gap-1">
           {items.map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
               end={n.to === "/"}
-              className={({ isActive }) => cx("flex items-center gap-3 rounded-xl px-3 py-3 font-semibold", isActive ? "bg-white text-brand" : "hover:bg-white/10")}
+              className={({ isActive }) => cx("flex items-center gap-3 rounded-xl px-3 py-3 font-semibold", isActive ? "bg-white/15 text-white shadow-[inset_3px_0_0_#e3b26a]" : "text-white/80 hover:bg-white/10 hover:text-white")}
             >
               {n.icon}
               {n.label}
@@ -68,6 +68,7 @@ export default function AdminLayout({ onLogout }: { onLogout: () => void }) {
         )}
       </aside>
 
+      <div className="no-print flex h-12 items-center bg-brand px-4 font-serif text-lg font-bold text-white md:hidden">공장 관리</div>
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-4 md:px-8 md:pb-10 md:pt-8">
         {slow && (
           <div className="no-print sticky top-2 z-40 mb-3 flex items-center gap-2 rounded-xl2 bg-parcel px-4 py-3 font-semibold text-white shadow">
@@ -84,7 +85,7 @@ export default function AdminLayout({ onLogout }: { onLogout: () => void }) {
             key={n.to}
             to={n.to}
             end={n.to === "/"}
-            className={({ isActive }) => cx("flex flex-col items-center gap-0.5 py-2 text-xs font-bold", isActive ? "text-brand" : "text-stone-500")}
+            className={({ isActive }) => cx("flex flex-col items-center gap-0.5 border-t-2 py-2 text-xs font-bold", isActive ? "border-brand text-brand" : "border-transparent text-stone-500")}
           >
             {n.icon}
             {n.label}

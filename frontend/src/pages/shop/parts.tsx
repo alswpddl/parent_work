@@ -5,28 +5,34 @@ import { Button, Field, Input, Modal, cx } from "../../components/ui";
 import { formatAddress, loadPostcode } from "../../lib/postcode";
 
 // ---------------------------------------------------------------- 상품 그림
-// 사진이 없으면 이름으로 고른 그림 + 색 타일 (부모님이 품목에 '사진주소'를 넣으면 사진으로 바뀜)
-const ART: [RegExp, string, string][] = [
-  [/새우|추젓|육젓|오젓/, "🦐", "from-rose-100 to-orange-100"],
-  [/명란|창란|알/, "🍣", "from-pink-100 to-rose-200"],
-  [/오징어/, "🦑", "from-amber-100 to-orange-200"],
-  [/낙지|쭈꾸미|주꾸미/, "🐙", "from-red-100 to-rose-200"],
-  [/멸치|액젓|까나리/, "🐟", "from-sky-100 to-cyan-100"],
-  [/굴|어리굴/, "🦪", "from-stone-100 to-slate-200"],
-  [/조개|바지락/, "🐚", "from-amber-50 to-yellow-100"],
-  [/게|꽃게/, "🦀", "from-orange-100 to-red-200"],
-];
-
-export function ProductArt({ name, image, className, big }: { name: string; image?: string; className?: string; big?: boolean }) {
+// 사진이 없으면 그림 대신 '라벨' 모양: 남색 바탕에 명조 품목명 (품목에 '사진주소'를 넣으면 사진으로 바뀜)
+export function ProductArt({ name, image, spec, className, big }: { name: string; image?: string; spec?: string; className?: string; big?: boolean }) {
   const [broken, setBroken] = useState(false);
   if (image && !broken) {
     return <img src={image} alt={name} loading="lazy" onError={() => setBroken(true)} className={cx("h-full w-full object-cover", className)} />;
   }
-  const [, emoji, grad] = ART.find(([re]) => re.test(name)) ?? [null, "🫙", "from-emerald-50 to-teal-100"];
   return (
-    <div className={cx("flex h-full w-full items-center justify-center bg-gradient-to-br", grad, className)} aria-hidden>
-      <span className={big ? "text-8xl" : "text-5xl"}>{emoji}</span>
+    <div className={cx("flex h-full w-full flex-col items-center justify-center bg-brand px-2 text-center text-white", className)} aria-hidden>
+      <span className={cx("font-serif font-bold leading-tight", big ? "text-4xl" : name.length > 3 ? "text-base" : "text-xl")}>{big ? name : name.slice(0, 4)}</span>
+      {big && spec && <span className="mt-2 text-sm text-white/75">{spec}</span>}
     </div>
+  );
+}
+
+/** 제품 표시사항 — 식품 포장 뒷면의 그 표. 상품 소개를 이 형식으로 보여 줘요 */
+export function LabelTable({ rows }: { rows: [string, ReactNode][] }) {
+  const shown = rows.filter(([, v]) => v !== "" && v !== null && v !== undefined);
+  return (
+    <table className="w-full border-collapse text-[15px]">
+      <tbody>
+        {shown.map(([k, v]) => (
+          <tr key={k} className="border-t border-line first:border-t-0">
+            <th scope="row" className="w-[5.5rem] whitespace-nowrap bg-paper px-3 py-2 text-left align-top font-semibold text-stone-600">{k}</th>
+            <td className="break-keep px-3 py-2">{v}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -109,7 +115,7 @@ export function StatusSteps({ status }: { status: string }) {
   return (
     <ol className="grid grid-cols-3 gap-1 text-center text-sm font-semibold">
       {["접수", "포장", "출발"].map((label, i) => (
-        <li key={label} className={cx("rounded-lg py-1.5", i < step ? "bg-brand text-white" : "bg-stone-100 text-stone-400")}>
+        <li key={label} className={cx("border-b-4 py-1.5", i < step ? "border-brand text-brand" : "border-line text-stone-400")}>
           {label}
         </li>
       ))}
@@ -133,7 +139,7 @@ export function Row({ k, v }: { k: string; v: ReactNode }) {
 export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
     <div className="mb-3 mt-7 flex items-end justify-between gap-2">
-      <h2 className="text-xl font-extrabold">{children}</h2>
+      <h2 className="text-xl font-extrabold text-brand-dark">{children}</h2>
       {right}
     </div>
   );

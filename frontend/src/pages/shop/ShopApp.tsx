@@ -15,8 +15,8 @@ import { Alert, Badge, Button, CopyButton, Field, Input, Spinner, Stepper, cx } 
 import { dateKo, telHref, won } from "../../lib/format";
 import Cart from "./Cart";
 import My from "./My";
-import { ProductArt, Row, STATUS, SectionTitle, StatusSteps, trackUrl } from "./parts";
-import { LAST_KEY, ShopProvider, digits, groupProducts, itemPath, store, useShop } from "./store";
+import { LabelTable, ProductArt, Row, STATUS, SectionTitle, StatusSteps, trackUrl } from "./parts";
+import { LAST_KEY, ShopProvider, digits, groupProducts, itemPath, store, useShop, type ProductGroup } from "./store";
 
 export default function ShopApp() {
   return (
@@ -63,20 +63,20 @@ function Shell() {
   const showTabs = page.name !== "cart" && page.name !== "item";
   return (
     <div className="min-h-screen bg-paper">
-      <header className="sticky top-0 z-30 border-b border-line bg-paper/95 backdrop-blur">
+      <header className="sticky top-0 z-30 bg-brand text-white">
         <div className="mx-auto flex h-14 max-w-lg items-center justify-between gap-2 px-4">
-          <Link to="/shop" className="min-w-0 truncate text-lg font-extrabold">
-            🫙 {s.info.factory_name}
+          <Link to="/shop" className="min-w-0 truncate font-serif text-xl font-bold">
+            {s.info.factory_name}
           </Link>
           <div className="flex items-center gap-1">
-            <Link to="/shop/my" className="flex h-10 items-center gap-1 rounded-full px-3 text-sm font-bold text-stone-700" aria-label="마이페이지">
+            <Link to="/shop/my" className="flex h-10 items-center gap-1 rounded px-3 text-sm font-bold text-white/90 hover:bg-white/10" aria-label="마이페이지">
               <User className="h-5 w-5" />
               {s.auth ? <span className="max-w-[5rem] truncate">{s.auth.profile.name}님</span> : "로그인"}
             </Link>
-            <Link to="/shop/cart" className="relative flex h-10 w-10 items-center justify-center rounded-full" aria-label="장바구니">
+            <Link to="/shop/cart" className="relative flex h-10 w-10 items-center justify-center rounded hover:bg-white/10" aria-label="장바구니">
               <ShoppingBasket className="h-6 w-6" />
               {s.cartCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 min-w-[1.25rem] rounded-full bg-red-600 px-1 text-center text-xs font-bold leading-5 text-white">{s.cartCount}</span>
+                <span className="absolute -right-0.5 -top-0.5 min-w-[1.25rem] rounded-full bg-brine px-1 text-center text-xs font-bold leading-5 text-white">{s.cartCount}</span>
               )}
             </Link>
           </div>
@@ -90,9 +90,9 @@ function Shell() {
         {page.name === "done" && <Done />}
         {page.name === "my" && <My />}
         {page.name === "lookup" && <Lookup />}
-        <footer className="mt-12 space-y-0.5 text-center text-xs text-stone-400">
-          <div>{s.info.factory_name}{s.info.factory_phone && ` · ${s.info.factory_phone}`}</div>
-          {s.info.contact_hours && <div>문의 {s.info.contact_hours}</div>}
+        <footer className="mt-12 border-t border-line pt-4 text-xs leading-relaxed text-stone-500">
+          <div className="font-serif text-sm font-bold text-stone-600">{s.info.factory_name}</div>
+          {s.info.factory_phone && <div>전화 {s.info.factory_phone}{s.info.contact_hours && ` (${s.info.contact_hours})`}</div>}
         </footer>
       </main>
 
@@ -107,7 +107,7 @@ function TabBar({ active }: { active: Page["name"] }) {
     <Link to={to} className={cx("relative flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-bold", on ? "text-brand" : "text-stone-500")}>
       {icon}
       {label}
-      {!!badge && <span className="absolute right-1/4 top-1 min-w-[1.1rem] rounded-full bg-red-600 px-1 text-center text-[11px] leading-[1.1rem] text-white">{badge}</span>}
+      {!!badge && <span className="absolute right-1/4 top-1 min-w-[1.1rem] rounded-full bg-brine px-1 text-center text-[11px] leading-[1.1rem] text-white">{badge}</span>}
     </Link>
   );
   return (
@@ -143,95 +143,110 @@ function Home() {
         ? `${won(info.free_shipping_over)} 이상 무료`
         : "주문 확인 후 안내";
 
+  const hasPrice = (g: ProductGroup) => g.variants.some((v) => v.price !== null);
+  const specRows = (g: ProductGroup) => (
+    <ul>
+      {g.variants.map((v) => (
+        <li key={v.sku} className="flex justify-between gap-3">
+          <span>{v.spec || v.unit}</span>
+          {hasPrice(g) && <span className={cx("font-bold", v.sold_out ? "text-stone-400 line-through" : "text-brine")}>{v.price !== null ? won(v.price) : "문의"}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+
   return (
     <div>
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-brand to-brand-dark p-6 text-white shadow-sm">
-        {s.auth && <div className="mb-1 text-sm opacity-90">{s.auth.profile.name}님, 반가워요 👋</div>}
-        <h1 className="text-3xl font-extrabold leading-tight">{info.factory_name}</h1>
-        <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed opacity-95">
+      <section className="pb-6 pt-3">
+        {s.auth && <p className="mb-2 text-sm text-stone-600">{s.auth.profile.name}님, 다시 오셨네요.</p>}
+        <p className="whitespace-pre-line break-keep font-serif text-[1.6rem] font-bold leading-snug text-brand-dark">
           {info.intro || "정성껏 담근 젓갈을\n공장에서 바로 보내 드려요."}
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <a href="#products">
-            <Button size="md" className="!bg-white !text-brand-dark">상품 보기</Button>
+            <Button size="md">상품 보기</Button>
           </a>
-          {s.auth ? (
-            <Link to="/shop/my">
-              <Button size="md" variant="ghost" className="!border-white/70 !bg-transparent !text-white">지난 주문 보기</Button>
-            </Link>
-          ) : (
-            <Link to="/shop/my">
-              <Button size="md" variant="ghost" className="!border-white/70 !bg-transparent !text-white">로그인·가입</Button>
-            </Link>
-          )}
+          <Link to="/shop/my">
+            <Button size="md" variant="ghost">{s.auth ? "지난 주문 보기" : "로그인·가입"}</Button>
+          </Link>
         </div>
       </section>
 
-      {info.notice && <p className="mt-4 whitespace-pre-line rounded-2xl bg-amber-50 px-4 py-3 text-amber-900">📢 {info.notice}</p>}
+      {info.notice && <p className="mb-4 whitespace-pre-line break-keep border-l-4 border-brine bg-brine-soft px-4 py-3">{info.notice}</p>}
 
-      <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-        <InfoChip icon="🚚" title="택배비" text={shipText} />
-        <InfoChip icon="📅" title="받는 날" text={`${dateKo(info.min_due_date)}부터${new Set(info.products.map((p) => p.lead_days)).size > 1 ? " (품목마다 달라요)" : ""}${info.closed_days_text ? ` · ${info.closed_days_text}요일 휴무` : ""}`} />
-        <InfoChip icon="💳" title="결제" text="계좌 입금 (주문 후 안내)" />
-        <InfoChip icon="☎️" title="문의" text={[info.factory_phone || "-", info.contact_hours].filter(Boolean).join(" · ")} href={info.factory_phone ? telHref(info.factory_phone) : undefined} />
-      </div>
+      <dl className="divide-y divide-line rounded-lg border border-line bg-white text-[15px]">
+        <InfoRow k="택배비" v={shipText} />
+        <InfoRow k="받는 날" v={`${dateKo(info.min_due_date)}부터${new Set(info.products.map((p) => p.lead_days)).size > 1 ? " (품목마다 달라요)" : ""}${info.closed_days_text ? `, ${info.closed_days_text}요일 제외` : ""}`} />
+        <InfoRow k="결제" v="계좌 입금 (주문 후 안내)" />
+        <InfoRow
+          k="문의"
+          v={info.factory_phone ? <a href={telHref(info.factory_phone)} className="font-bold text-brand underline underline-offset-2">{info.factory_phone}</a> : "-"}
+          sub={info.contact_hours}
+        />
+      </dl>
 
       <div id="products" className="scroll-mt-16" />
-      <SectionTitle right={<span className="text-sm text-stone-500">{groups.length}가지</span>}>우리 젓갈</SectionTitle>
+      <SectionTitle>상품</SectionTitle>
       {groups.length === 0 && <Alert tone="info">지금은 주문할 수 있는 상품이 없어요. 전화로 문의해 주세요.</Alert>}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-4">
         {groups.map((g) => (
-          <Link key={g.name} to={itemPath(g.name)} className="group overflow-hidden rounded-2xl border border-line bg-white shadow-sm transition active:scale-[0.98]">
-            <div className="relative aspect-square">
-              <ProductArt name={g.name} image={g.image_url} />
-              {g.soldOut && <div className="absolute inset-0 flex items-center justify-center bg-black/45 text-lg font-extrabold text-white">품절</div>}
+          <article key={g.name} className={cx("overflow-hidden rounded-lg border border-line bg-white", g.soldOut && "opacity-70")}>
+            {g.image_url && (
+              <div className="aspect-[16/9]">
+                <ProductArt name={g.name} image={g.image_url} />
+              </div>
+            )}
+            <div className="flex items-baseline justify-between gap-2 border-b-2 border-brand px-4 pb-2 pt-3">
+              <h3 className="font-serif text-2xl font-bold text-brand-dark">{g.name}</h3>
+              {g.soldOut && <Badge tone="red">품절</Badge>}
             </div>
-            <div className="p-3">
-              <div className="truncate font-extrabold">{g.name}</div>
-              <div className="truncate text-sm text-stone-500">{g.variants.map((v) => v.spec || v.unit).join(" · ")}</div>
-              {g.minPrice !== null && (
-                <div className="mt-1 font-extrabold text-brand-dark">
-                  {won(g.minPrice)}
-                  {g.variants.length > 1 && <span className="text-sm font-semibold text-stone-500">~</span>}
-                </div>
-              )}
-            </div>
-          </Link>
+            <LabelTable
+              rows={[
+                [hasPrice(g) ? "규격·가격" : "규격", specRows(g)],
+                ...(hasPrice(g) ? [] : ([["가격", "주문 확인 후 안내해 드려요"]] as [string, string][])),
+                ["소개", g.description],
+              ]}
+            />
+            {!g.soldOut && (
+              <div className="border-t border-line p-3">
+                <Link to={itemPath(g.name)}>
+                  <Button block size="md">규격·수량 고르기</Button>
+                </Link>
+              </div>
+            )}
+          </article>
         ))}
       </div>
 
-      <SectionTitle>주문은 이렇게</SectionTitle>
-      <ol className="space-y-2">
-        {[
-          ["🛒", "상품을 골라 장바구니에 담아요"],
-          ["📝", "받는 분·주소·받을 날을 적고 주문해요"],
-          ["💳", "안내된 계좌로 입금해요"],
-          ["📦", "입금 확인 후 정성껏 포장해 보내 드려요"],
-        ].map(([icon, text], i) => (
-          <li key={text} className="flex items-center gap-3 rounded-2xl bg-white p-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-lg">{icon}</span>
-            <span><b className="mr-1 text-brand">{i + 1}.</b>{text}</span>
+      <SectionTitle>주문 순서</SectionTitle>
+      <ol className="divide-y divide-line rounded-lg border border-line bg-white">
+        {["상품을 골라 장바구니에 담아요", "받는 분·주소·받을 날을 적고 주문해요", "안내된 계좌로 입금해요", "입금을 확인하면 포장해서 보내 드려요"].map((text, i) => (
+          <li key={text} className="flex gap-3 px-4 py-3">
+            <span className="w-4 shrink-0 font-bold text-brand">{i + 1}</span>
+            <span className="break-keep">{text}</span>
           </li>
         ))}
       </ol>
       {!s.auth && (
-        <p className="mt-4 rounded-2xl bg-white p-4 text-sm text-stone-600">
-          💡 <b>가입하면</b> 주소를 다시 안 적어도 되고, 지난 주문을 한 번에 다시 할 수 있어요.{" "}
-          <Link to="/shop/my" className="font-bold text-brand underline">가입하기</Link>
+        <p className="mt-4 break-keep text-sm text-stone-600">
+          가입하면 주소를 다시 적지 않아도 되고, 지난 주문을 그대로 다시 할 수 있어요.{" "}
+          <Link to="/shop/my" className="font-bold text-brand underline underline-offset-2">가입하기</Link>
         </p>
       )}
     </div>
   );
 }
 
-function InfoChip({ icon, title, text, href }: { icon: string; title: string; text: string; href?: string }) {
-  const body = (
-    <div className="h-full rounded-2xl bg-white p-3">
-      <div className="text-stone-500">{icon} {title}</div>
-      <div className="mt-0.5 break-keep font-bold">{text}</div>
+function InfoRow({ k, v, sub }: { k: string; v: ReactNode; sub?: string }) {
+  return (
+    <div className="flex gap-3 px-4 py-2.5">
+      <dt className="w-16 shrink-0 text-stone-500">{k}</dt>
+      <dd className="min-w-0 break-keep font-semibold">
+        {v}
+        {sub && <div className="text-sm font-normal text-stone-500">{sub}</div>}
+      </dd>
     </div>
   );
-  return href ? <a href={href}>{body}</a> : body;
 }
 
 // ================================================================ 상품
@@ -263,11 +278,13 @@ function Item({ name }: { name: string }) {
       <button onClick={() => (window.history.length > 1 ? window.history.back() : nav("/shop"))} className="mb-2 flex items-center gap-1 font-semibold text-stone-600">
         <ChevronLeft className="h-5 w-5" /> 뒤로
       </button>
-      <div className="relative aspect-[4/3] overflow-hidden rounded-3xl border border-line">
-        <ProductArt name={g.name} image={g.image_url} big />
-      </div>
-      <h1 className="mt-4 text-3xl font-extrabold">{g.name}</h1>
-      {g.description && <p className="mt-1 text-lg text-stone-600">{g.description}</p>}
+      {g.image_url ? (
+        <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-lg border border-line">
+          <ProductArt name={g.name} image={g.image_url} big />
+        </div>
+      ) : null}
+      <h1 className="border-b-2 border-brand pb-2 font-serif text-3xl font-bold text-brand-dark">{g.name}</h1>
+      {g.description && <p className="mt-3 break-keep text-lg text-stone-700">{g.description}</p>}
 
       <SectionTitle>규격·수량 고르기</SectionTitle>
       <div className="space-y-3">
@@ -279,8 +296,8 @@ function Item({ name }: { name: string }) {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <div className="text-xl font-extrabold">{v.spec || v.unit}</div>
-                  {v.price !== null && <div className="font-bold text-brand-dark">{won(v.price)} <span className="text-sm font-normal text-stone-500">/ 1{v.unit}</span></div>}
-                  {!v.sold_out && <div className="text-sm text-stone-500">📅 {v.lead_days ? `주문 ${v.lead_days}일 뒤부터 받아요` : "오늘 보내 드려요"}</div>}
+                  {v.price !== null && <div className="font-bold text-brine">{won(v.price)} <span className="text-sm font-normal text-stone-500">/ 1{v.unit}</span></div>}
+                  {!v.sold_out && v.lead_days > 0 && <div className="text-sm text-stone-500">주문하고 {v.lead_days}일 뒤부터 받아요</div>}
                   {inCart > 0 && <div className="text-sm text-stone-500">장바구니에 {inCart}{v.unit} 있어요</div>}
                 </div>
                 {v.sold_out && <Badge tone="red">품절</Badge>}
@@ -460,7 +477,7 @@ function Lookup() {
             <Row k="품목" v={r.items} />
             <Row k="받는 날" v={r.due_date === "날짜 미정" ? "정해지면 알려 드려요" : r.due_date} />
             <Row k="보내는 방법" v={r.ship_method} />
-            <Row k="입금" v={r.paid ? "확인됐어요 ✔" : "확인 전이에요"} />
+            <Row k="입금" v={r.paid ? "확인됐어요" : "확인 전이에요"} />
             {r.tracking_no && <Row k="송장" v={`${r.carrier} ${r.tracking_no}`} />}
             {r.truck_no && <Row k="화물차" v={r.truck_no} />}
           </dl>

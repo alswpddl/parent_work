@@ -106,18 +106,24 @@ export function CopyButton({ text, label = "복사", size = "md", variant = "gho
 }
 
 // ---------------------------------------------------------------- 상자
+/** 제목 앞에 붙은 그림 문자(🔨 📋 …)를 떼어 낸다 — 글자만으로 차분하게 */
+const LEADING_EMOJI = /^(?:[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}][\u{FE0F}\u{200D}\p{Extended_Pictographic}]*\s*)+/u;
+function plain(t: ReactNode): ReactNode {
+  return typeof t === "string" ? t.replace(LEADING_EMOJI, "") : t;
+}
+
 export function Card({ title, actions, children, className, tone }: { title?: ReactNode; actions?: ReactNode; children?: ReactNode; className?: string; tone?: "warn" | "info" }) {
   return (
     <section
       className={cx(
         "mb-4 rounded-2xl border p-4 md:p-5",
-        tone === "warn" ? "border-amber-200 bg-amber-50" : tone === "info" ? "border-parcel/20 bg-parcel-soft" : "border-line bg-[#fffdf8]",
+        tone === "warn" ? "border-amber-200 bg-amber-50" : tone === "info" ? "border-parcel/20 bg-parcel-soft" : "border-line bg-white",
         className,
       )}
     >
       {(title || actions) && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          {title && <h2 className="text-lg font-extrabold">{title}</h2>}
+        <div className="-mx-4 mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 pb-3 md:-mx-5 md:px-5">
+          {title && <h2 className="text-lg font-extrabold">{plain(title)}</h2>}
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
         </div>
       )}
@@ -130,7 +136,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   return (
     <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight">{title}</h1>
+        <h1 className="text-2xl font-extrabold">{plain(title)}</h1>
         {subtitle && <p className="mt-1 text-sm text-stone-600">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -150,7 +156,7 @@ const TONES: Record<Tone, string> = {
 };
 
 export function Badge({ tone = "gray", children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
-  return <span className={cx("inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-sm font-bold", TONES[tone], className)}>{children}</span>;
+  return <span className={cx("inline-flex items-center gap-1 whitespace-nowrap rounded px-2.5 py-0.5 text-sm font-bold", TONES[tone], className)}>{children}</span>;
 }
 
 export function MethodBadge({ method }: { method: string }) {
@@ -257,7 +263,7 @@ export function Stepper({ value, onChange, min = 0, max = 99999 }: { value: numb
 
 export function Segmented<T extends string>({ value, options, onChange, className }: { value: T; options: { value: T; label: ReactNode }[]; onChange: (v: T) => void; className?: string }) {
   return (
-    <div className={cx("flex gap-1 rounded-2xl bg-[#ebe6da] p-1", className)} role="group">
+    <div className={cx("flex gap-1 rounded-2xl bg-[#e3e8ed] p-1", className)} role="group">
       {options.map((o) => (
         <button
           key={o.value}
