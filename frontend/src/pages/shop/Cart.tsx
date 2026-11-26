@@ -272,7 +272,7 @@ export default function Cart() {
             {subtotal !== null && <span className="whitespace-nowrap text-lg font-extrabold">{won(total ?? subtotal)}</span>}
           </div>
           <Button size="xl" block icon={<ShoppingBasket className="h-6 w-6" />} onClick={() => check() && setConfirm(true)}>
-            주문하기
+            {subtotal !== null ? `${won(total ?? subtotal)} 주문하기` : "주문하기"}
           </Button>
         </div>
       </div>

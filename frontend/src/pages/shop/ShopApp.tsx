@@ -15,7 +15,7 @@ import { Alert, Badge, Button, CopyButton, Field, Input, Spinner, Stepper, cx } 
 import { dateKo, telHref, won } from "../../lib/format";
 import Cart from "./Cart";
 import My from "./My";
-import { LabelTable, ProductArt, Row, STATUS, SectionTitle, StatusSteps, trackUrl } from "./parts";
+import { LabelTable, PayGuide, PayStatus, ProductArt, Row, STATUS, SectionTitle, StatusSteps, trackUrl } from "./parts";
 import { LAST_KEY, ShopProvider, digits, groupProducts, itemPath, store, useShop, type ProductGroup } from "./store";
 
 export default function ShopApp() {
@@ -367,11 +367,12 @@ function Done() {
     );
   return (
     <div>
-      <div className="mb-5 rounded-3xl bg-brand p-6 text-center text-white">
-        <CheckCircle2 className="mx-auto mb-2 h-14 w-14" />
-        <div className="text-2xl font-extrabold">주문이 들어갔어요!</div>
-        <div className="mt-1 opacity-90">확인하고 연락드릴게요. 감사합니다 🙏</div>
+      <div className="mb-5 border-b-2 border-brand pb-4 text-center">
+        <CheckCircle2 className="mx-auto mb-2 h-12 w-12 text-brand" />
+        <div className="font-serif text-2xl font-bold text-brand-dark">주문이 접수됐어요</div>
+        <div className="mt-1 break-keep text-stone-600">아래 계좌로 입금해 주시면 확인하고 바로 준비해요.</div>
       </div>
+      <div className="mb-4"><StatusSteps status="접수" paid={false} /></div>
       {joined && <Alert tone="ok">가입도 끝났어요. 다음부터는 휴대폰 번호와 비밀번호로 로그인하면 돼요.</Alert>}
 
       <div className="mb-4 rounded-2xl border-2 border-line bg-white p-5">
@@ -390,17 +391,9 @@ function Done() {
         </dl>
       </div>
 
-      {r.bank_account && (
-        <div className="mb-4 rounded-2xl border-2 border-amber-200 bg-amber-50 p-5">
-          <div className="mb-1 font-extrabold">입금 계좌</div>
-          <div className="mb-3 break-keep text-lg font-bold">{r.bank_account}</div>
-          <CopyButton size="sm" label="계좌 복사" text={r.bank_account} />
-          <p className="mt-3 text-sm text-stone-600">
-            {r.estimated_total !== null ? `${won(r.estimated_total)}을 보내 주세요. 입금이 확인되면 바로 준비해요. ` : "금액은 확인 후 문자로 안내드려요. "}
-            입금자명은 주문하신 분 성함으로 해 주세요.
-          </p>
-        </div>
-      )}
+      <div className="mb-4">
+        <PayGuide amount={r.estimated_total} account={r.bank_account} note={r.shipping_note || undefined} />
+      </div>
 
       <div className="grid grid-cols-2 gap-2">
         {s.auth ? (
@@ -469,15 +462,18 @@ function Lookup() {
         <div className="mt-5 rounded-2xl border-2 border-line bg-white p-5">
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="font-extrabold">{r.order_id}</span>
-            <Badge tone={st.tone}>{st.label}</Badge>
+            <span className="flex items-center gap-3">
+              <span className="font-extrabold text-brand-dark">{st.label}</span>
+              <PayStatus paid={r.paid} status={r.status} />
+            </span>
           </div>
-          <div className="mb-4"><StatusSteps status={r.status} /></div>
+          <div className="mb-4"><StatusSteps status={r.status} paid={r.paid} /></div>
           <dl className="space-y-1">
             <Row k="주문일" v={r.created_at} />
             <Row k="품목" v={r.items} />
             <Row k="받는 날" v={r.due_date === "날짜 미정" ? "정해지면 알려 드려요" : r.due_date} />
             <Row k="보내는 방법" v={r.ship_method} />
-            <Row k="입금" v={r.paid ? "확인됐어요" : "확인 전이에요"} />
+            <Row k="입금" v={<PayStatus paid={r.paid} status={r.status} />} />
             {r.tracking_no && <Row k="송장" v={`${r.carrier} ${r.tracking_no}`} />}
             {r.truck_no && <Row k="화물차" v={r.truck_no} />}
           </dl>
