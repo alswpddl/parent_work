@@ -678,16 +678,28 @@ function KakaoBotCard({ b }: { b: SystemStatus["kakao_bot"] }) {
           <Alert tone="ok">
             챗봇 서버가 켜져 있어요. 정해진 질문에만 답하고, 그 밖의 말에는 메뉴 버튼과 전화번호를 보여 줘요.
           </Alert>
-          <div className="mb-3 rounded-xl bg-white p-3">
-            <div className="text-sm text-stone-500">스킬 주소 — 카카오 챗봇 관리자센터 [스킬] 에 붙여넣기 (남에게 보여 주지 마세요)</div>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <span className="break-all font-mono text-sm">{b.skill_url}</span>
-              <CopyButton size="sm" text={b.skill_url} onCopied={(ok) => toast(ok ? "복사했어요." : "복사가 막혔어요.", ok ? "ok" : "error")} />
-            </div>
+          <div className="mb-3 rounded-xl border-2 border-line bg-white p-3">
+            <div className="mb-2 font-bold">스킬 주소</div>
+            <p className="mb-2 text-sm text-stone-500">카카오 챗봇 관리자센터 [스킬] → URL 칸에 붙여넣어요. 비밀 키가 들어 있으니 남에게 보여 주지 마세요.</p>
+            <CopyButton
+              label="스킬 주소 복사하기"
+              variant="primary"
+              text={b.skill_url}
+              onCopied={(ok) => toast(ok ? "복사했어요. 챗봇 관리자센터에 붙여넣으세요." : "자동 복사가 막혔어요. 아래 칸을 길게 눌러(또는 눌러서 Ctrl+C) 복사해 주세요.", ok ? "ok" : "error")}
+            />
+            <input
+              readOnly
+              aria-label="스킬 주소"
+              value={b.skill_url}
+              onFocus={(e: { currentTarget: HTMLInputElement }) => e.currentTarget.select()}
+              onClick={(e: { currentTarget: HTMLInputElement }) => e.currentTarget.select()}
+              className="mt-2 w-full rounded-lg border border-line bg-stone-50 px-2 py-2 font-mono text-xs"
+            />
+            <p className="mt-1 text-xs text-stone-400">버튼이 안 되면 위 칸을 누르면 전체 선택돼요 → Ctrl+C</p>
           </div>
         </>
       ) : (
-        <Alert tone="info">아직 꺼져 있어요. Render 에 KAKAO_SKILL_KEY 를 넣으면 켜져요.</Alert>
+        <Alert tone="warn">챗봇이 아직 꺼져 있어서 스킬 주소가 없어요. 서버(Render)에 KAKAO_SKILL_KEY 값이 있어야 켜져요.</Alert>
       )}
       <p className="mb-2 text-sm text-stone-600">
         손님이 공장 카카오톡 채널에 "택배비 얼마예요?", "명란 있어요?", "O-20261126-003 5678" 처럼 보내면 바로 답해요. 못 알아들은 질문은 [기록]에 '챗봇 질문'으로 남아요.
