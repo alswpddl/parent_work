@@ -572,3 +572,43 @@ export interface MyOrder {
   tracking_no: string;
   truck_no: string;
 }
+
+// ---------------------------------------------------------------- 숙성 저장소 지도
+export type TankStatus = "ready" | "aging" | "empty";
+export interface Tank {
+  tank_id: string;
+  building: string;
+  no: number;
+  row: number;
+  col: number;
+  capacity_kg: number;
+  current_kg: number;
+  product: string;
+  filled_on: string;
+  memo: string;
+  status: TankStatus;
+  ready_on: string | null;
+  months_left: number | null;
+  progress: number;
+}
+export interface TankBuilding {
+  name: string;
+  rows: number;
+  cols: number;
+  total_kg: number;
+  tanks: Tank[];
+}
+export interface TankMap {
+  aging_months: number;
+  summary: {
+    ready_count: number;
+    ready_kg: number;
+    aging_count: number;
+    aging_kg: number;
+    empty_count: number;
+    in_3m_kg: number;
+    in_6m_kg: number;
+    in_12m_kg: number;
+  };
+  buildings: TankBuilding[];
+}

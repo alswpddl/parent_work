@@ -9,6 +9,7 @@ from ...context import AppContext
 from .service import AdjustIn, ItemIn, ItemOut, ItemPatch, MoveOut, NeedOut, ReceiveIn, StocktakeIn, StocktakeOut
 
 router = APIRouter(prefix="/api/inventory", tags=["inventory"], dependencies=[Depends(require_admin)])
+tanks_router = APIRouter(prefix="/api/inventory/tanks", tags=["inventory"], dependencies=[Depends(require_admin)])
 
 
 def _svc(ctx: AppContext):
@@ -61,3 +62,29 @@ def receive(item_id: str, body: ReceiveIn, ctx: AppContext = Depends(get_ctx)) -
 @router.post("/{item_id}/adjust", response_model=ItemOut)
 def adjust(item_id: str, body: AdjustIn, ctx: AppContext = Depends(get_ctx)) -> ItemOut:
     return _svc(ctx).adjust(item_id, body)
+
+
+# ---------------------------------------------------------------- 숙성 저장소 지도
+from .aging import BuildingIn, TankMapOut, TankOut, TankPatch  # noqa: E402
+
+
+@tanks_router.get("", response_model=TankMapOut)
+def tank_map(ctx: AppContext = Depends(get_ctx)) -> TankMapOut:
+    """건물별 저장소와 숙성 단계 (숙성 끝 · 숙성 중 · 비어 있음)"""
+    return ctx.services["aging"].map()
+
+
+@tanks_router.post("/buildings", response_model=TankMapOut, status_code=201)
+def add_building(body: BuildingIn, ctx: AppContext = Depends(get_ctx)) -> TankMapOut:
+    return ctx.services["aging"].add_building(body)
+
+
+@tanks_router.delete("/buildings/{name}", response_model=TankMapOut)
+def delete_building(name: str, ctx: AppContext = Depends(get_ctx)) -> TankMapOut:
+    return ctx.services["aging"].delete_building(name)
+
+
+@tanks_router.patch("/{tank_id}", response_model=TankOut)
+def update_tank(tank_id: str, body: TankPatch, ctx: AppContext = Depends(get_ctx)) -> TankOut:
+    return ctx.services["aging"].update(tank_id, body)
+

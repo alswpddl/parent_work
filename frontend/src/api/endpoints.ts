@@ -7,6 +7,8 @@ import type {
   CarrierFormat,
   Customer,
   PayInfo,
+  Tank,
+  TankMap,
   CustomerInput,
   Features,
   GenerateResult,
@@ -158,6 +160,12 @@ export const deleteMarketMapping = (source: string, externalName: string) =>
 
 // ---------------------------------------------------------------- 4분기
 export const listInventory = () => api<InventoryItem[]>("/api/inventory");
+export const tankMap = () => api<TankMap>("/api/inventory/tanks");
+export const addTankBuilding = (body: { name: string; count: number; per_row: number; capacity_kg: number; product: string }) =>
+  api<TankMap>("/api/inventory/tanks/buildings", { body });
+export const deleteTankBuilding = (name: string) => api<TankMap>(`/api/inventory/tanks/buildings/${encodeURIComponent(name)}`, { method: "DELETE" });
+export const updateTank = (tankId: string, patch: Partial<Pick<Tank, "current_kg" | "capacity_kg" | "filled_on" | "product" | "memo" | "row" | "col">>) =>
+  api<Tank>(`/api/inventory/tanks/${encodeURIComponent(tankId)}`, { method: "PATCH", body: patch });
 export const createInventoryItem = (body: Partial<InventoryItem> & { name: string }) => api<InventoryItem>("/api/inventory", { body });
 export const updateInventoryItem = (id: string, patch: Partial<InventoryItem>) => api<InventoryItem>(`/api/inventory/${id}`, { method: "PATCH", body: patch });
 export const receiveStock = (id: string, qty: number, memo: string) => api<InventoryItem>(`/api/inventory/${id}/receive`, { body: { qty, memo } });

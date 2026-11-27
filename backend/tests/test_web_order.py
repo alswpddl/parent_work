@@ -30,7 +30,9 @@ def test_shop_info_lists_visible_products_and_privacy(full_ctx):
     assert {p.sku for p in info.products} == {"SES-18L", "PER-18L", "CHI-5KG"}
     assert info.products[0].price is not None and info.show_prices
     assert "개인정보 수집·이용 동의" in info.privacy_text and "주문일로부터 1년" in info.privacy_text
-    assert info.min_due_date == today() + timedelta(days=1)
+    from app.modules.q2_web_order.service import first_open_day
+
+    assert info.min_due_date == first_open_day(today() + timedelta(days=1), {6})  # 일요일 휴무면 월요일
 
     full_ctx.settings.save(SettingsPatch(shop_show_prices=False))
     assert all(p.price is None for p in _svc(full_ctx).info().products)

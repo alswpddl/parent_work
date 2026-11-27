@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Boxes, ClipboardCheck, ClipboardPaste, Home, LogOut, Menu, ReceiptText, Settings, ShoppingBag, Truck, ListOrdered, PhoneCall, Loader2 } from "lucide-react";
+import { Boxes, ClipboardCheck, ClipboardPaste, Home, ListOrdered, Loader2, LogOut, Menu, PhoneCall, ReceiptText, Settings, ShoppingBag, Truck, Warehouse } from "lucide-react";
 import { setToken } from "../api/client";
 import { cx } from "../components/ui";
 import { useFeatures } from "../lib/features";
@@ -20,6 +20,7 @@ const NAV: NavItem[] = [
   { to: "/shipping", label: "출고", icon: <Truck className="h-6 w-6" />, mobile: true },
   { to: "/orders", label: "주문 목록", icon: <ListOrdered className="h-6 w-6" /> },
   { to: "/inventory", label: "재고", icon: <Boxes className="h-6 w-6" />, module: "q4_inventory" },
+  { to: "/tanks", label: "숙성 저장소", icon: <Warehouse className="h-6 w-6" />, module: "q4_inventory" },
   { to: "/settlements", label: "월말 정산", icon: <ReceiptText className="h-6 w-6" />, module: "q4_settlement" },
   { to: "/reorder", label: "리마인드", icon: <PhoneCall className="h-6 w-6" />, module: "q4_reorder" },
   { to: "/marketplace", label: "오픈마켓", icon: <ShoppingBag className="h-6 w-6" />, module: "q3_marketplace" },

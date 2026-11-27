@@ -8,6 +8,7 @@ import AdminLayout from "./layouts/AdminLayout";
 import { FeaturesProvider } from "./lib/features";
 import Home from "./pages/Home";
 import Inventory from "./pages/Inventory";
+import Tanks from "./pages/Tanks";
 import Login from "./pages/Login";
 import Marketplace from "./pages/Marketplace";
 import More from "./pages/More";
@@ -76,6 +77,7 @@ function AdminApp() {
           <Route path="orders" element={<Orders />} />
           <Route path="shipping" element={<Shipping />} />
           {has("q4_inventory") && <Route path="inventory" element={<Inventory />} />}
+          {has("q4_inventory") && <Route path="tanks" element={<Tanks />} />}
           {has("q4_settlement") && <Route path="settlements" element={<Settlements />} />}
           {has("q4_reorder") && <Route path="reorder" element={<Reorder />} />}
           {has("q3_marketplace") && <Route path="marketplace" element={<Marketplace />} />}

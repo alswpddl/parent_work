@@ -38,7 +38,9 @@ def test_form_and_place_order(full_ctx, http):
     form = _svc(full_ctx).form(tok)
     assert form.customer_name == "한솥식당" and len(form.products) == 4
     assert [(f.sku, f.qty) for f in form.last_items] == [("SES-18L", 6)]
-    assert form.min_due_date == today() + timedelta(days=1)
+    from app.modules.q2_web_order.service import first_open_day
+
+    assert form.min_due_date == first_open_day(today() + timedelta(days=1), {6})  # 일요일 휴무면 월요일
 
     with pytest.raises(ValidationFailed):
         _svc(full_ctx).place(tok, SelfOrderIn(items=[OrderItemIn(sku="SES-18L", qty=1)], due_date=today()))
