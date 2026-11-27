@@ -1,7 +1,7 @@
 // 마이페이지: 로그인 안 했으면 로그인·가입, 했으면 주문 내역 · 다시 주문 · 내 정보
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, MapPin, RotateCcw } from "lucide-react";
+import { ChevronDown, CreditCard, LogOut, MapPin, RotateCcw } from "lucide-react";
 import { errorMessage } from "../../api/client";
 import { shopChangePassword, shopLogin, shopMyOrders, shopSignup, shopUpdateMe } from "../../api/endpoints";
 import type { MyOrder } from "../../api/types";
@@ -231,7 +231,12 @@ function Orders() {
               {o.total !== null && <b>합계 {won(o.total)}</b>}
             </div>
             {!o.paid && o.status !== "취소" && (
-              <div className="mt-3">
+              <div className="mt-3 space-y-2">
+                {s.info?.pay_client_key && o.total !== null && (
+                  <Link to={`/shop/pay/${encodeURIComponent(o.order_id)}`} className="block">
+                    <Button block size="lg" icon={<CreditCard className="h-5 w-5" />}>카드·간편결제로 {won(o.total)} 결제하기</Button>
+                  </Link>
+                )}
                 <PayGuide amount={o.total} account={s.info?.bank_account ?? ""} />
               </div>
             )}

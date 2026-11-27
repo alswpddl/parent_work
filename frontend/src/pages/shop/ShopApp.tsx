@@ -5,9 +5,10 @@
 //   /shop/done         주문 완료
 //   /shop/my           마이페이지 (로그인 안 했으면 로그인·가입)
 //   /shop/lookup       비회원 주문 조회
+//   /shop/pay/…        온라인 결제 (토스페이먼츠) — Pay.tsx
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { CheckCircle2, ChevronLeft, Home as HomeIcon, MapPin, Package, Phone, Search, ShoppingBasket, User } from "lucide-react";
+import { CheckCircle2, ChevronLeft, CreditCard, Home as HomeIcon, MapPin, Package, Phone, Search, ShoppingBasket, User } from "lucide-react";
 import { errorMessage } from "../../api/client";
 import { shopLookup, shopMe } from "../../api/endpoints";
 import type { PublicOrder } from "../../api/types";
@@ -15,6 +16,7 @@ import { Alert, Badge, Button, CopyButton, Field, Input, Spinner, Stepper, cx } 
 import { dateKo, telHref, won } from "../../lib/format";
 import Cart from "./Cart";
 import My from "./My";
+import { Pay, PayFail, PaySuccess } from "./Pay";
 import { LabelTable, PayGuide, PayStatus, ProductArt, Row, STATUS, SectionTitle, StatusSteps, trackUrl } from "./parts";
 import { LAST_KEY, ShopProvider, digits, groupProducts, itemPath, store, useShop, type ProductGroup } from "./store";
 
@@ -26,12 +28,25 @@ export default function ShopApp() {
   );
 }
 
-type Page = { name: "home" } | { name: "item"; item: string } | { name: "cart" } | { name: "done" } | { name: "my" } | { name: "lookup" };
+type Page =
+  | { name: "home" }
+  | { name: "item"; item: string }
+  | { name: "cart" }
+  | { name: "done" }
+  | { name: "my" }
+  | { name: "lookup" }
+  | { name: "pay"; orderId: string }
+  | { name: "pay-success" }
+  | { name: "pay-fail" };
 
 function route(pathname: string, search: string): Page {
   const p = pathname.replace(/\/+$/, "");
   const m = /^\/shop\/item\/(.+)$/.exec(p);
   if (m) return { name: "item", item: decodeURIComponent(m[1]) };
+  if (p === "/shop/pay/success") return { name: "pay-success" };
+  if (p === "/shop/pay/fail") return { name: "pay-fail" };
+  const pm = /^\/shop\/pay\/([^/]+)$/.exec(p);
+  if (pm) return { name: "pay", orderId: decodeURIComponent(pm[1]) };
   if (p === "/shop/cart") return { name: "cart" };
   if (p === "/shop/done") return { name: "done" };
   if (p === "/shop/my" || p === "/shop/login") return { name: "my" };
@@ -90,6 +105,9 @@ function Shell() {
         {page.name === "done" && <Done />}
         {page.name === "my" && <My />}
         {page.name === "lookup" && <Lookup />}
+        {page.name === "pay" && <Pay orderId={page.orderId} />}
+        {page.name === "pay-success" && <PaySuccess />}
+        {page.name === "pay-fail" && <PayFail />}
         <footer className="mt-12 border-t border-line pt-4 text-xs leading-relaxed text-stone-500">
           <div className="font-serif text-sm font-bold text-stone-600">{s.info.factory_name}</div>
           {s.info.factory_phone && <div>전화 {s.info.factory_phone}{s.info.contact_hours && ` (${s.info.contact_hours})`}</div>}
@@ -391,6 +409,16 @@ function Done() {
         </dl>
       </div>
 
+      {s.info?.pay_client_key && r.estimated_total !== null && r.pay_token && (
+        <div className="mb-3">
+          <Link to={`/shop/pay/${encodeURIComponent(r.order_id)}?t=${encodeURIComponent(r.pay_token)}`}>
+            <Button size="xl" block icon={<CreditCard className="h-6 w-6" />}>
+              카드·간편결제로 {won(r.estimated_total)} 결제하기
+            </Button>
+          </Link>
+          <p className="mt-2 text-center text-sm text-stone-500">또는 아래 계좌로 입금해 주세요</p>
+        </div>
+      )}
       <div className="mb-4">
         <PayGuide amount={r.estimated_total} account={r.bank_account} note={r.shipping_note || undefined} />
       </div>
@@ -477,6 +505,11 @@ function Lookup() {
             {r.tracking_no && <Row k="송장" v={`${r.carrier} ${r.tracking_no}`} />}
             {r.truck_no && <Row k="화물차" v={r.truck_no} />}
           </dl>
+          {!r.paid && r.status !== "취소" && s.info?.pay_client_key && (
+            <Link to={`/shop/pay/${encodeURIComponent(r.order_id)}?p=${digits(phone4)}`} className="mt-3 block">
+              <Button block size="lg" icon={<CreditCard className="h-5 w-5" />}>카드·간편결제로 결제하기</Button>
+            </Link>
+          )}
           {r.tracking_no && (
             <a className="mt-4 flex items-center justify-center gap-2 rounded-xl2 bg-parcel px-4 py-3 font-bold text-white" href={trackUrl(r.carrier, r.tracking_no)} target="_blank" rel="noreferrer">
               <MapPin className="h-5 w-5" /> 배송 위치 보기

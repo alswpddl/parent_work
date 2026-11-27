@@ -92,6 +92,9 @@ class AppConfig(BaseModel):
     kakao_redirect_uri: str = ""  # 비우면 {public_api_url}/api/integrations/kakao/callback
 
     # --- 솔라피 알림톡 (거래처 안내) ---
+    # 토스페이먼츠 (카드·간편결제·계좌이체). 클라이언트 키는 브라우저용(공개), 시크릿 키는 서버 전용
+    toss_client_key: str = ""
+    toss_secret_key: str = ""
     solapi_api_key: str = ""
     solapi_api_secret: str = ""
     solapi_sender: str = ""  # 솔라피에 등록한 발신번호 (문자 대체발송용)
@@ -149,6 +152,14 @@ class AppConfig(BaseModel):
         return self.kakao_redirect_uri or f"{self.public_api_url}/api/integrations/kakao/callback"
 
     @property
+    def toss_enabled(self) -> bool:
+        return bool(self.toss_client_key and self.toss_secret_key)
+
+    @property
+    def toss_test_mode(self) -> bool:
+        return self.toss_client_key.startswith("test_")
+
+    @property
     def solapi_enabled(self) -> bool:
         return bool(self.solapi_api_key and self.solapi_api_secret and self.solapi_pfid)
 
@@ -194,6 +205,8 @@ class AppConfig(BaseModel):
             kakao_rest_api_key=g("KAKAO_REST_API_KEY", ""),
             kakao_client_secret=g("KAKAO_CLIENT_SECRET", ""),
             kakao_redirect_uri=g("KAKAO_REDIRECT_URI", ""),
+            toss_client_key=g("TOSS_CLIENT_KEY", "").strip(),
+            toss_secret_key=g("TOSS_SECRET_KEY", "").strip(),
             solapi_api_key=g("SOLAPI_API_KEY", ""),
             solapi_api_secret=g("SOLAPI_API_SECRET", ""),
             solapi_sender=g("SOLAPI_SENDER", ""),

@@ -83,7 +83,9 @@ ORDERS = TabSpec(
         C("unit_price", "단가", "int"),
         C("amount", "공급가액", "int"),
         C("shipping_fee", "배송비", "int", quarter=2),
-        C("order_total", "주문합계", "int"),  # 품목 금액 합 + 배송비 (모든 줄에 같은 값, 가격 모르는 품목이 있으면 빈칸)
+        C("order_total", "주문합계", "int"),
+        C("pay_method", "결제수단", "str", quarter=2),  # 계좌입금 확인은 빈칸, 온라인 결제면 카드·간편결제 등
+        C("pay_key", "결제키", "str", quarter=2),  # 토스페이먼츠 paymentKey (환불할 때 필요)  # 품목 금액 합 + 배송비 (모든 줄에 같은 값, 가격 모르는 품목이 있으면 빈칸)
         C("shipped_at", "출고일시", "datetime"),
         C("paid_at", "입금확인", "datetime", quarter=2),
         C("carrier", "택배사", quarter=3),

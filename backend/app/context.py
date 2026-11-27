@@ -57,6 +57,7 @@ class AppContext:
     startup_report: dict = field(default_factory=dict)
     services: dict[str, Any] = field(default_factory=dict)  # 모듈이 만든 서비스 (예: "inventory")
     system_tab_specs: tuple[TabSpec, ...] = ()
+    http: HttpFunc = http_request  # 외부 API 호출 (토스페이먼츠 등). 테스트에서 가짜로 바꿔 끼움
 
 
 def _system_specs(separate: bool) -> tuple[TabSpec, TabSpec]:
@@ -135,6 +136,7 @@ def build_context(
         tokens=tokens,
         messages=messages,
         bus=bus,
+        http=http,
         jobs=JobRegistry(),
         briefing=BriefingRegistry(),
         claude=claude or ClaudeClient(config.anthropic_api_key, config.claude_model, config.claude_timeout),

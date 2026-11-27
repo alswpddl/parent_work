@@ -6,6 +6,7 @@ import type {
   Briefing,
   CarrierFormat,
   Customer,
+  PayInfo,
   CustomerInput,
   Features,
   GenerateResult,
@@ -103,6 +104,13 @@ export const shopMyOrders = (token: string) => api<MyOrder[]>("/api/public/shop/
 export const resetWebPassword = (customerId: string) => api<Customer>(`/api/customers/${encodeURIComponent(customerId)}/reset-web-password`, { method: "POST" });
 export const shopLookup = (orderId: string, phone4: string) =>
   api<PublicOrder>("/api/public/shop/orders/lookup", { query: { order_id: orderId, phone4 }, auth: false });
+export const shopPayInfo = (orderId: string, by: { payToken?: string; phone4?: string; token?: string }) =>
+  api<PayInfo>(`/api/public/shop/pay/${encodeURIComponent(orderId)}`, {
+    query: { pay_token: by.payToken || "", phone: by.phone4 || "" },
+    ...shopAuth(by.token || ""),
+  });
+export const shopPayConfirm = (body: { payment_key: string; order_id: string; amount: number }) =>
+  api<PublicOrder>("/api/public/shop/pay/confirm", { body, auth: false });
 export const publicRecent = (token: string) => api<PublicOrder[]>(`/api/public/orders/${token}`, { auth: false });
 
 export const briefingPreview = () => api<Briefing>("/api/briefing/preview");

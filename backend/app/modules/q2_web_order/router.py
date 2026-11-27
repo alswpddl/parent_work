@@ -6,6 +6,8 @@ from ...api.deps import get_ctx
 from ...context import AppContext
 from ..q2_self_order.service import PublicOrderOut
 from .service import (
+    PayConfirmIn,
+    PayInfo,
     AuthOut,
     GuestOrderIn,
     GuestOrderOut,
@@ -81,3 +83,24 @@ def lookup(
     ctx: AppContext = Depends(get_ctx),
 ) -> PublicOrderOut:
     return ctx.services["web_order"].lookup(order_id, phone4, client_ip(request))
+
+
+# ---------------------------------------------------------------- 온라인 결제 (토스페이먼츠)
+@router.get("/pay/{order_id}", response_model=PayInfo)
+def pay_info(
+    order_id: str,
+    request: Request,
+    phone: str = Query("", description="받는 분 전화번호 뒤 4자리"),
+    pay_token: str = Query("", description="주문 완료 화면에서 받은 결제 표"),
+    x_shop_token: str = Header(default=""),
+    ctx: AppContext = Depends(get_ctx),
+) -> PayInfo:
+    return ctx.services["web_order"].pay_info(order_id, phone_tail=phone, pay_token=pay_token, member_token=x_shop_token,
+                              client_ip=client_ip(request))
+
+
+@router.post("/pay/confirm", response_model=PublicOrderOut)
+def pay_confirm(body: PayConfirmIn, ctx: AppContext = Depends(get_ctx)) -> PublicOrderOut:
+    """결제창 인증 성공 → 금액 확인 → 토스 승인 → 입금 확인 처리 (시간이 걸려 동기 함수)"""
+    return ctx.services["web_order"].pay_confirm(body)
+
