@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from ...core.errors import NotFoundError, TooManyRequests, UnauthorizedError, ValidationFailed
 from ...core.ids import next_seq_id
+from ...core.signing import sign, verify
 from ...core.timeutil import fmt_date_ko, now, today
 from ...schemas.customer import CustomerOut
 from ...schemas.order import OrderCreate, OrderItemIn, OrderOut
@@ -97,6 +98,8 @@ class ShopInfo(BaseModel):
     threshold_kg: float  # 이 무게 이상이면 화물 (택배비 대신 운임 별도)
     privacy_text: str
     products: list[ShopProduct]
+    pay_client_key: str = ""  # 토스페이먼츠 클라이언트 키 (비면 온라인 결제 없음 — 계좌 입금만)
+    pay_test_mode: bool = False  # 테스트 키면 True → 화면에 '테스트 결제' 표시
 
 
 class GuestOrderIn(BaseModel):
@@ -132,6 +135,23 @@ class GuestOrderOut(BaseModel):
     bank_account: str
     factory_phone: str
     token: str = ""  # 주문하면서 가입했거나 로그인 상태면 로그인 토큰
+    pay_token: str = ""  # 이 주문을 바로 온라인 결제할 때 쓰는 표 (주문 완료 화면 → 결제창)
+
+
+class PayInfo(BaseModel):
+    """결제창 띄우기 전에 서버가 정해 주는 값 — 금액은 브라우저가 아니라 여기서 계산"""
+    order_id: str
+    order_name: str
+    amount: int
+    customer_name: str
+    client_key: str
+    test_mode: bool
+
+
+class PayConfirmIn(BaseModel):
+    payment_key: str = Field(min_length=10, max_length=200)
+    order_id: str = Field(min_length=6, max_length=64)
+    amount: int = Field(ge=1)
 
 
 # ---------------------------------------------------------------- 손님 계정
@@ -294,6 +314,8 @@ class WebOrderService:
             contact_hours=st.contact_hours,
             show_prices=st.shop_show_prices,
             bank_account=st.bank_account,
+            pay_client_key=self.ctx.config.toss_client_key if self.ctx.config.toss_enabled else "",
+            pay_test_mode=self.ctx.config.toss_enabled and self.ctx.config.toss_test_mode,
             min_due_date=self._min_due(st),
             closed_weekdays=closed,
             closed_days_text=", ".join(WEEKDAYS_KO[i] for i in closed),
@@ -469,6 +491,7 @@ class WebOrderService:
                 bank_account=st.bank_account,
                 factory_phone=st.factory_phone,
                 token=new_token or (token if member else ""),
+                pay_token=self._pay_token(order.order_id),
             )
             if body.client_token:
                 self._done[body.client_token] = (time.monotonic(), out)
@@ -628,3 +651,106 @@ class WebOrderService:
         if o is None or not digits(o.phone).endswith(tail):
             raise NotFoundError("주문을 찾지 못했어요. 주문번호와 전화번호를 확인해 주세요.")
         return to_public(o)
+
+    # ---------------------------------------------------------------- 온라인 결제 (토스페이먼츠)
+    @property
+    def _http(self) -> Any:
+        from ...integrations.http import http_request
+
+        return getattr(self.ctx, "http", None) or http_request
+
+    def _pay_token(self, order_id: str) -> str:
+        return sign(self._secret, f"pay:{order_id}", 3 * 24 * 3600)
+
+    @staticmethod
+    def pay_amount(o: OrderOut) -> int | None:
+        """결제할 금액 = 품목 금액 + 택배비. 가격이 빈 품목이 있으면 온라인 결제 불가"""
+        if o.total_amount is None or o.total_amount <= 0:
+            return None
+        return o.total_amount + (o.shipping_fee or 0)
+
+    def _payable(self, order_id: str) -> OrderOut:
+        cfg = self.ctx.config
+        if not cfg.toss_enabled:
+            raise ValidationFailed("지금은 온라인 결제를 받지 않아요. 계좌로 입금해 주세요.")
+        try:
+            o = self.ctx.orders.get((order_id or "").strip().upper())
+        except NotFoundError:
+            raise NotFoundError("주문을 찾지 못했어요.") from None
+        if o.status == "취소":
+            raise ValidationFailed("취소된 주문이에요.")
+        return o
+
+    def pay_info(self, order_id: str, *, phone_tail: str = "", pay_token: str = "", member_token: str = "",
+                 client_ip: str = "") -> PayInfo:
+        key = client_ip or "anon"
+        self.lookup_limiter.check(key)
+        self.lookup_limiter.hit(key)
+        o = self._payable(order_id)
+        allowed = False
+        if pay_token and verify(self._secret, pay_token) == f"pay:{o.order_id}":
+            allowed = True
+        elif phone_tail and len(digits(phone_tail)) == 4 and digits(o.phone).endswith(digits(phone_tail)):
+            allowed = True
+        elif member_token:
+            try:
+                allowed = self.member(member_token).customer_id == o.customer_id
+            except Exception:
+                allowed = False
+        if not allowed:
+            raise NotFoundError("주문을 찾지 못했어요.")
+        if o.paid_at is not None:
+            raise ValidationFailed("이미 결제(입금)된 주문이에요.")
+        amount = self.pay_amount(o)
+        if amount is None:
+            raise ValidationFailed("금액이 아직 정해지지 않은 주문이라 공장에서 확인 후 안내해 드려요.")
+        first = o.lines[0].product_name if o.lines else "주문"
+        name = first if len(o.lines) <= 1 else f"{first} 외 {len(o.lines) - 1}건"
+        cfg = self.ctx.config
+        return PayInfo(order_id=o.order_id, order_name=name[:100], amount=amount, customer_name=o.recipient or o.customer_name,
+                       client_key=cfg.toss_client_key, test_mode=cfg.toss_test_mode)
+
+    def pay_confirm(self, body: PayConfirmIn) -> PublicOrderOut:
+        """결제 승인: 금액을 주문과 맞춰 본 뒤 토스에 승인 요청 → 성공하면 '입금 확인' 처리"""
+        o = self._payable(body.order_id)
+        if o.paid_at is not None:
+            if o.pay_key and o.pay_key == body.payment_key:
+                return to_public(o)  # 새로고침 등으로 두 번 온 경우
+            raise ValidationFailed("이미 결제(입금)된 주문이에요. 결제가 두 번 됐다면 공장에 연락해 주세요.")
+        amount = self.pay_amount(o)
+        if amount is None or amount != body.amount:
+            # 금액을 바꿔 치기 했거나 주문이 바뀐 경우 — 승인하지 않는다 (인증만 된 결제는 자동 취소됨)
+            self.ctx.logs.write("결제 금액 불일치", o.order_id, f"요청 {body.amount}원 / 주문 {amount}원", actor="웹결제")
+            raise ValidationFailed("결제 금액이 주문 금액과 달라요. 주문을 다시 확인해 주세요.")
+        from ...integrations.toss import TossClient
+
+        res = TossClient(self.ctx.config.toss_secret_key, self._http).confirm(body.payment_key, o.order_id, amount)
+        if not res.ok:
+            self.ctx.logs.write("결제 실패", o.order_id, res.message, actor="웹결제")
+            raise ValidationFailed(f"결제가 완료되지 않았어요. {res.message}")
+        method = res.method or "온라인결제"
+        lines = self.ctx.orders_repo.lines_of(o.order_id, fresh=True)
+        self.ctx.orders_repo.update_many(
+            [((o.order_id, l["line_no"]), {"paid_at": now(), "pay_method": method, "pay_key": body.payment_key, "updated_at": now()})
+             for l in lines]
+        )
+        self.ctx.logs.write("온라인 결제", o.order_id, f"{amount:,}원 · {method}", actor=f"웹결제:{o.recipient}")
+        out = self.ctx.orders.get(o.order_id, fresh=True)
+        self.ctx.bus.publish("order.paid", {"order": out})
+        return to_public(out)
+
+    def refund(self, o: OrderOut, actor: str) -> None:
+        """주문 취소 전에 온라인 결제를 환불한다. 실패하면 취소도 멈춘다 (돈만 빠지고 취소되는 일 없게)."""
+        if not o.pay_key or not o.paid_at or "환불" in o.pay_method:
+            return
+        if not self.ctx.config.toss_secret_key:
+            raise ValidationFailed("온라인 결제 주문인데 결제 키가 없어 환불을 못 했어요. 토스페이먼츠 상점관리자에서 직접 취소해 주세요.")
+        from ...integrations.toss import TossClient
+
+        res = TossClient(self.ctx.config.toss_secret_key, self._http).cancel(o.pay_key, f"주문 취소 ({actor})")
+        if not res.ok:
+            raise ValidationFailed(f"카드 결제 환불이 안 됐어요: {res.message} — 토스페이먼츠 상점관리자에서 확인해 주세요.")
+        lines = self.ctx.orders_repo.lines_of(o.order_id, fresh=True)
+        self.ctx.orders_repo.update_many([((o.order_id, l["line_no"]), {"pay_method": f"{o.pay_method} (환불)"}) for l in lines])
+        self.ctx.logs.write("결제 환불", o.order_id, f"{(self.pay_amount(o) or 0):,}원", actor=actor)
+

@@ -212,3 +212,69 @@ def test_quiet_hours():
     assert not in_quiet_hours("20:00-07:00", time(7, 0))
     assert not in_quiet_hours("", time(2, 0))
     assert not in_quiet_hours("엉터리", time(2, 0))
+
+
+# ---------------------------------------------------------------- 온라인 결제 (토스페이먼츠)
+def _pay_ctx(full_ctx):
+    full_ctx.config = full_ctx.config.model_copy(update={"toss_client_key": "test_ck_abc", "toss_secret_key": "test_sk_abc"})
+    return full_ctx
+
+
+def test_pay_flow_confirm_marks_paid_and_cancel_refunds(full_ctx, http):
+    from app.modules.q2_web_order.service import PayConfirmIn
+
+    ctx = _pay_ctx(full_ctx)
+    s = _svc(ctx)
+    assert s.info().pay_client_key == "test_ck_abc" and s.info().pay_test_mode
+    done = s.place(_body())
+    info = s.pay_info(done.order_id, pay_token=done.pay_token)
+    assert info.amount == s.pay_amount(ctx.orders.get(done.order_id))
+    # 다른 주문의 표로는 못 봄
+    with pytest.raises(NotFoundError):
+        s.pay_info(done.order_id, pay_token="엉터리")
+
+    # 금액을 바꿔 보내면 승인 안 함 (토스 호출도 안 함)
+    with pytest.raises(ValidationFailed, match="금액"):
+        s.pay_confirm(PayConfirmIn(payment_key="pk_test_1234567890", order_id=done.order_id, amount=info.amount - 1000))
+    assert not [c for c in http.calls if "tosspayments" in c["url"]]
+
+    http.queue("/v1/payments/confirm", 200, {"status": "DONE", "method": "카드", "card": {"issuerCode": "11"}})
+    out = s.pay_confirm(PayConfirmIn(payment_key="pk_test_1234567890", order_id=done.order_id, amount=info.amount))
+    assert out.paid
+    call = [c for c in http.calls if "tosspayments" in c["url"]][-1]
+    assert call["json"] == {"paymentKey": "pk_test_1234567890", "orderId": done.order_id, "amount": info.amount}
+    assert call["headers"]["Authorization"].startswith("Basic ")
+    o = ctx.orders.get(done.order_id, fresh=True)
+    assert o.pay_method == "카드" and o.pay_key == "pk_test_1234567890"
+    # 같은 결제가 다시 와도 그대로 (새로고침)
+    assert s.pay_confirm(PayConfirmIn(payment_key="pk_test_1234567890", order_id=done.order_id, amount=info.amount)).paid
+    # 입금 표시 해제는 막고, 취소하면 환불
+    with pytest.raises(ValidationFailed, match="취소"):
+        ctx.orders.set_paid(done.order_id, False)
+    http.queue("/pk_test_1234567890/cancel", 200, {"status": "CANCELED"})
+    ctx.orders.cancel(done.order_id)
+    assert "환불" in ctx.orders.get(done.order_id, fresh=True).pay_method
+
+
+def test_pay_refund_failure_stops_cancel(full_ctx, http):
+    from app.modules.q2_web_order.service import PayConfirmIn
+
+    ctx = _pay_ctx(full_ctx)
+    s = _svc(ctx)
+    done = s.place(_body())
+    amt = s.pay_info(done.order_id, pay_token=done.pay_token).amount
+    http.queue("/v1/payments/confirm", 200, {"status": "DONE", "method": "간편결제", "easyPay": {"provider": "토스페이"}})
+    s.pay_confirm(PayConfirmIn(payment_key="pk_test_abcdefghij", order_id=done.order_id, amount=amt))
+    assert ctx.orders.get(done.order_id).pay_method == "간편결제(토스페이)"
+    http.queue("/cancel", 400, {"code": "ALREADY_CANCELED", "message": "이미 취소된 결제"})
+    with pytest.raises(ValidationFailed, match="환불"):
+        ctx.orders.cancel(done.order_id)
+    assert ctx.orders.get(done.order_id, fresh=True).status != "취소"
+
+
+def test_pay_disabled_without_keys(full_ctx):
+    s = _svc(full_ctx)
+    assert s.info().pay_client_key == ""
+    done = s.place(_body())
+    with pytest.raises(ValidationFailed, match="온라인 결제"):
+        s.pay_info(done.order_id, pay_token=done.pay_token)

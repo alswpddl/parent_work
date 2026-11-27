@@ -12,7 +12,9 @@ from .. import ModuleSpec
 def register(app, ctx) -> None:
     from .service import WebOrderService
 
-    ctx.services["web_order"] = WebOrderService(ctx)
+    svc = WebOrderService(ctx)
+    ctx.services["web_order"] = svc
+    ctx.orders.refund_hook = svc.refund  # 카드 결제 주문을 취소하면 자동 환불
     if hasattr(app, "routes"):
         from .router import router
 

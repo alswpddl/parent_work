@@ -709,6 +709,29 @@ function KakaoBotCard({ b }: { b: SystemStatus["kakao_bot"] }) {
   );
 }
 
+/** 온라인 결제(토스페이먼츠) 켜짐 여부 — 키는 서버(Render)에만 둔다 */
+function TossCard() {
+  const { features } = useFeatures();
+  const on = !!features?.integrations.toss;
+  const test = !!features?.integrations.toss_test;
+  return (
+    <Card title="온라인 결제 (토스페이먼츠)">
+      {!on && (
+        <Alert tone="info">
+          꺼져 있어요. 손님은 계좌 입금만 할 수 있어요. 켜려면 Render 에 TOSS_CLIENT_KEY · TOSS_SECRET_KEY 를 넣어 주세요.
+        </Alert>
+      )}
+      {on && test && (
+        <Alert tone="warn">테스트 모드예요. 손님이 결제해도 실제 돈은 빠지지 않아요. 계약 후 라이브 키(live_…)로 바꾸면 실제 결제가 돼요.</Alert>
+      )}
+      {on && !test && <Alert tone="ok">실제 결제를 받고 있어요. 카드 결제 주문을 취소하면 자동으로 환불돼요.</Alert>}
+      <p className="mt-2 text-sm text-stone-500">
+        카드 번호·CVC 같은 결제 정보는 토스 결제창에서만 입력돼요. 우리 서버와 시트에는 결제수단 이름과 결제키만 남아요.
+      </p>
+    </Card>
+  );
+}
+
 function SystemTab() {
   const s = useAsync(getSystemStatus, []);
   return (
@@ -718,6 +741,7 @@ function SystemTab() {
         <>
           <GoogleCard g={s.data.google} />
           {s.data.kakao_bot && <KakaoBotCard b={s.data.kakao_bot} />}
+          <TossCard />
           <Card title="연결 상태">
             <p className="mb-2">데이터 저장소: <b>{s.data.sheets_backend === "gspread" ? "구글 시트" : "메모리 (연습용 · 서버 끄면 사라짐)"}</b></p>
             {s.data.config_problems.map((p) => (

@@ -33,6 +33,8 @@ class IntegrationsOut(BaseModel):
     kakao: bool
     solapi: bool
     email: bool
+    toss: bool = False  # 토스페이먼츠 온라인 결제
+    toss_test: bool = False  # 테스트 키 (실제 돈은 안 빠짐)
 
 
 class FeaturesOut(BaseModel):
@@ -57,6 +59,8 @@ def features(request: Request, ctx: AppContext = Depends(get_ctx)) -> FeaturesOu
             kakao=ctx.kakao.configured,
             solapi=ctx.solapi.configured,
             email=ctx.mailer.configured,
+            toss=ctx.config.toss_enabled,
+            toss_test=ctx.config.toss_enabled and ctx.config.toss_test_mode,
         ),
         public_web_url=ctx.config.public_web_url,
     )

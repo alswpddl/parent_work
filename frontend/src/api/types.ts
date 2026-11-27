@@ -16,7 +16,7 @@ export interface Features {
   ai_parser: boolean;
   auth_required: boolean;
   env: string;
-  integrations: { ai: boolean; kakao: boolean; solapi: boolean; email: boolean };
+  integrations: { ai: boolean; kakao: boolean; solapi: boolean; email: boolean; toss?: boolean; toss_test?: boolean };
   public_web_url: string;
 }
 
@@ -497,6 +497,18 @@ export interface ShopInfo {
   threshold_kg: number;
   privacy_text: string;
   products: ShopProduct[];
+  pay_client_key: string; // 비면 온라인 결제 꺼짐 (계좌 입금만)
+  pay_test_mode: boolean;
+}
+
+/** 결제창 띄우기 전 서버가 정해 준 값 (금액은 서버 계산) */
+export interface PayInfo {
+  order_id: string;
+  order_name: string;
+  amount: number;
+  customer_name: string;
+  client_key: string;
+  test_mode: boolean;
 }
 
 export interface GuestOrderInput {
@@ -527,6 +539,7 @@ export interface GuestOrderResult {
   bank_account: string;
   factory_phone: string;
   token: string;
+  pay_token: string;
 }
 
 export interface ShopProfile {

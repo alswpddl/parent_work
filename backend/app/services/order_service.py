@@ -9,7 +9,7 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any
+from typing import Any, Callable
 
 from ..core.errors import NotFoundError, ValidationFailed
 from ..core.events import EventBus
@@ -439,6 +439,8 @@ class OrderService:
         cur = self.get(order_id, fresh=True)
         if cur.status == "취소":
             raise ValidationFailed("취소된 주문이에요.")
+        if not paid and cur.pay_key and "환불" not in cur.pay_method:
+            raise ValidationFailed("카드·간편결제로 결제된 주문이에요. 환불하려면 주문을 취소해 주세요.")
         self._set_status(order_id, {"paid_at": now() if paid else None})
         out = self.get(order_id, fresh=True)
         self.logs.write("입금 확인" if paid else "입금 확인 취소", order_id, out.customer_name, actor=actor)
@@ -469,10 +471,15 @@ class OrderService:
         self.bus.publish("order.unshipped", {"order": out})
         return out
 
+    # 온라인 결제(카드 등) 주문을 취소할 때 먼저 환불하는 함수 — 웹 주문서 모듈이 넣어 준다
+    refund_hook: "Callable[[OrderOut, str], None] | None" = None
+
     def cancel(self, order_id: str, *, actor: str = "관리자") -> OrderOut:
         cur = self.get(order_id, fresh=True)
         if cur.status == "취소":
             return cur
+        if cur.pay_key and self.refund_hook is not None:
+            self.refund_hook(cur, actor)  # 환불 실패면 여기서 멈춤 (취소 안 됨)
         was_shipped = cur.status == "출고완료"
         self._set_status(order_id, {"status": "취소"})
         out = self.get(order_id, fresh=True)
