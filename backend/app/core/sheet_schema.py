@@ -271,8 +271,28 @@ STOCK_MOVES = TabSpec(
     ),
 )
 
+# 숙성 저장소 (4분기) — 건물마다 저장소 8~10개. 담근 날 + 숙성 기간 = 출하 가능일
+TANKS = TabSpec(
+    name="tanks",
+    title="저장소",
+    key_fields=("tank_id",),
+    columns=(
+        C("tank_id", "저장소ID", quarter=4),  # 예) 1동-03
+        C("building", "건물", quarter=4),
+        C("no", "번호", "int", quarter=4),
+        C("row", "줄", "int", quarter=4),
+        C("col", "칸", "int", quarter=4),
+        C("capacity_kg", "용량kg", "float", quarter=4),
+        C("current_kg", "현재kg", "float", quarter=4),
+        C("product", "품목", quarter=4),
+        C("filled_on", "담근날", text=True, quarter=4),  # 2024-06 처럼 월까지만 적어도 됨
+        C("memo", "메모", quarter=4),
+        C("updated_at", "수정일시", "datetime", quarter=4),
+    ),
+)
+
 ALL_TABS: tuple[TabSpec, ...] = (
-    ORDERS, CUSTOMERS, PRODUCTS, INVENTORY, SETTLEMENTS, SETTINGS, LOGS, MARKET_MAP, STOCK_MOVES,
+    ORDERS, CUSTOMERS, PRODUCTS, INVENTORY, SETTLEMENTS, SETTINGS, LOGS, MARKET_MAP, STOCK_MOVES, TANKS,
 )
 
 # ---------------------------------------------------------------------------

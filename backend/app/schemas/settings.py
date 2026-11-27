@@ -29,6 +29,7 @@ SETTING_DEFS: list[tuple[str, str, str, str]] = [
     ("contact_hours", "문의 받는 시간", "", "주문서·챗봇에 보여요. 예) 오전 8시 ~ 오후 4시"),
     ("quiet_hours", "밤 알림 쉬는 시간", "", "예) 20:00-07:00 — 이 시간에 들어온 주문은 바로 알리지 않고 아침 브리핑에 모아서 알려요"),
     ("daily_capacity_kg", "하루 최대 작업량(kg)", "0", "오늘의 할당량에 넘침 경고. 0 이면 끔"),
+    ("aging_months", "숙성 기간(개월)", "24", "담근 날부터 이 기간이 지나면 저장소 지도에 '숙성 끝'으로 표시"),
     ("shop_shipping_fee", "웹 주문 택배비(원)", "0", "0 이면 '택배비는 확인 후 안내'로 표시"),
     ("shop_free_shipping_over", "택배비 무료 기준 금액(원)", "0", "이 금액 이상 주문하면 택배비 무료. 0 이면 무료 없음"),
     ("closed_days", "받는 날로 못 고르는 요일", "일", "쉼표로 (예: 일 또는 토,일). 택배가 쉬는 날. 없으면 '없음'"),
@@ -71,6 +72,7 @@ class AppSettings(BaseModel):
     contact_hours: str = ""
     quiet_hours: str = ""
     daily_capacity_kg: float = Field(default=0, ge=0)
+    aging_months: int = Field(default=24, ge=1, le=120)
     shop_shipping_fee: int = Field(default=0, ge=0, le=100_000)
     shop_free_shipping_over: int = Field(default=0, ge=0)
     closed_days: str = "일"
@@ -118,6 +120,7 @@ class SettingsPatch(BaseModel):
     contact_hours: str | None = Field(default=None, max_length=60)
     quiet_hours: str | None = Field(default=None, max_length=20)
     daily_capacity_kg: float | None = Field(default=None, ge=0)
+    aging_months: int | None = Field(default=None, ge=1, le=120)
     shop_shipping_fee: int | None = Field(default=None, ge=0, le=100_000)
     shop_free_shipping_over: int | None = Field(default=None, ge=0)
     closed_days: str | None = Field(default=None, max_length=20)
