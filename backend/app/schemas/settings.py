@@ -32,6 +32,9 @@ SETTING_DEFS: list[tuple[str, str, str, str]] = [
     ("aging_months", "숙성 기간(개월)", "24", "담근 날부터 이 기간이 지나면 저장소 지도에 '숙성 끝'으로 표시"),
     ("shop_shipping_fee", "웹 주문 택배비(원)", "0", "0 이면 '택배비는 확인 후 안내'로 표시"),
     ("shop_free_shipping_over", "택배비 무료 기준 금액(원)", "0", "이 금액 이상 주문하면 택배비 무료. 0 이면 무료 없음"),
+    ("mail_order_no", "통신판매업 신고번호", "", "주문서 맨 아래 사업자 정보에 표시 (예: 제2026-경남통영-0000호). 신고 면제면 비워 두기"),
+    ("privacy_officer", "개인정보 보호책임자", "", "개인정보처리방침에 표시 (예: 최갑열 055-641-6882). 비우면 대표자·공장 전화"),
+    ("refund_policy", "교환·반품 안내", "", "주문서 '교환·반품' 페이지 본문. 비우면 기본 문구(식품 기준)가 보여요"),
     ("closed_days", "받는 날로 못 고르는 요일", "일", "쉼표로 (예: 일 또는 토,일). 택배가 쉬는 날. 없으면 '없음'"),
     # --- 3분기: 알림톡
     ("notify_customers", "거래처 출고 알림톡 보내기", "예", "예 / 아니오"),
@@ -83,6 +86,9 @@ class AppSettings(BaseModel):
     company_owner: str = ""
     company_biz_type: str = "제조"
     company_biz_item: str = "식품"
+    mail_order_no: str = ""
+    privacy_officer: str = ""
+    refund_policy: str = ""
     bank_account: str = ""
     statement_note: str = ""
     reorder_factor: float = Field(default=1.3, ge=1.0, le=5.0)
@@ -131,6 +137,9 @@ class SettingsPatch(BaseModel):
     company_owner: str | None = None
     company_biz_type: str | None = None
     company_biz_item: str | None = None
+    mail_order_no: str | None = Field(default=None, max_length=60)
+    privacy_officer: str | None = Field(default=None, max_length=80)
+    refund_policy: str | None = Field(default=None, max_length=3000)
     bank_account: str | None = None
     statement_note: str | None = None
     reorder_factor: float | None = Field(default=None, ge=1.0, le=5.0)

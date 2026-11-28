@@ -114,6 +114,9 @@ class ShopInfo(BaseModel):
     kakao_login: bool = False  # 카카오로 시작하기 버튼 보이기
     google_login: bool = False  # 구글로 시작하기 버튼 보이기
     sms_verify: bool = False  # 비회원 조회를 이름+휴대폰+문자 인증번호로
+    business: dict[str, str] = {}  # 맨 아래 사업자 정보 (빈 칸은 화면에서 숨김)
+    refund_policy: str = ""  # 비면 화면의 기본 문구
+    privacy_retention: str = ""
 
 
 class GuestOrderIn(BaseModel):
@@ -281,7 +284,7 @@ class _Limiter:
 
 PRIVACY_TEMPLATE = (
     "[개인정보 수집·이용 동의]\n"
-    "· 수집 항목: 성함, 상호(선택), 휴대폰 번호, 배송 주소\n"
+    "· 수집 항목: 성함, 상호(선택), 휴대폰 번호, 배송 주소 (카카오·구글로 로그인하면 그 회원번호)\n"
     "· 이용 목적: 주문 확인, 상품 배송, 배송·입금 안내 연락\n"
     "· 보관 기간: {retention} (관련 법령에서 더 길게 보관하도록 정한 경우 그 기간)\n"
     "· 동의하지 않으실 수 있으나, 그 경우 주문을 받을 수 없어요.\n"
@@ -346,6 +349,13 @@ class WebOrderService(ShopExtrasMixin):
             kakao_login=self.kakao_login_enabled,
             google_login=self.google_login_enabled,
             sms_verify=self.sms_verify_enabled,
+            business={
+                "상호": st.factory_name, "대표자": st.company_owner, "사업자등록번호": st.company_biz_no,
+                "통신판매업 신고번호": st.mail_order_no, "주소": st.factory_address, "전화": st.factory_phone,
+                "개인정보 보호책임자": st.privacy_officer or " ".join(x for x in (st.company_owner, st.factory_phone) if x),
+            },
+            refund_policy=st.refund_policy,
+            privacy_retention=st.privacy_retention or "주문일로부터 1년",
             min_due_date=self._min_due(st),
             closed_weekdays=closed,
             closed_days_text=", ".join(WEEKDAYS_KO[i] for i in closed),

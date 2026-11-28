@@ -53,6 +53,9 @@ export interface AppSettings {
   company_owner: string;
   company_biz_type: string;
   company_biz_item: string;
+  mail_order_no: string;
+  privacy_officer: string;
+  refund_policy: string;
   bank_account: string;
   statement_note: string;
   reorder_factor: number;
@@ -508,6 +511,9 @@ export interface ShopInfo {
   kakao_login: boolean;
   google_login?: boolean;
   sms_verify?: boolean; // 비회원 조회를 이름+휴대폰+문자 인증번호로
+  business?: Record<string, string>; // 맨 아래 사업자 정보 (상호·대표자·사업자등록번호…)
+  refund_policy?: string;
+  privacy_retention?: string;
 }
 
 export interface ShopReview {

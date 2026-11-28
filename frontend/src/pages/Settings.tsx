@@ -31,6 +31,7 @@ import {
 } from "../api/endpoints";
 import type { AppSettings, Customer, Product, SystemStatus } from "../api/types";
 import { PushCard } from "../components/PushCard";
+import { DEFAULT_REFUND } from "./shop/Policy";
 import { useToast } from "../components/Toast";
 import { Alert, Badge, Button, Card, ConfirmButton, CopyButton, Empty, Field, Input, LoadState, Modal, PageHeader, Segmented, Select, Textarea, Toggle } from "../components/ui";
 import { useFeatures } from "../lib/features";
@@ -159,6 +160,17 @@ function BasicTab() {
           </div>
           {text("contact_hours", "문의 받는 시간", "예) 오전 8시 ~ 오후 4시 — 주문서·챗봇에 보여요")}
           {text("closed_days", "받는 날로 못 고르는 요일", "예) 일 / 토,일 / 없음 — 거래처 주문 링크에도 똑같이 적용돼요")}
+          <div className="mb-3 mt-2 border-t border-line pt-4">
+            <div className="mb-2 font-bold">사업자 정보·약관 (주문서 맨 아래)</div>
+            <p className="mb-3 text-sm text-stone-500">상호·대표자·사업자등록번호·주소·전화는 위 '우리 공장'에 적은 값이 그대로 나와요. 빈 칸은 주문서에서 숨겨요.</p>
+            <div className="grid gap-x-3 md:grid-cols-2">
+              {text("mail_order_no", "통신판매업 신고번호", "예) 제2026-경남통영-0000호 · 신고 면제면 비워 두기")}
+              {text("privacy_officer", "개인정보 보호책임자", "예) 최갑열 055-641-6882 · 비우면 대표자·전화")}
+            </div>
+            <Field label="교환·반품 안내" hint="한 줄에 한 가지씩. 비워 두면 아래 기본 문구가 나와요.">
+              <Textarea rows={5} value={v.refund_policy ?? ""} placeholder={DEFAULT_REFUND} onChange={(e) => set({ refund_policy: e.target.value })} />
+            </Field>
+          </div>
           <p className="text-sm text-stone-500">받는 날은 품목마다 적은 '준비일'을 따르고, 비어 있으면 위 '거래처 셀프 주문'의 최소 준비일을 써요. 입금 계좌는 주문 완료 화면에 보여요.</p>
         </Card>
       )}

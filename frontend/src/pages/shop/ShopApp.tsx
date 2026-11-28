@@ -16,6 +16,7 @@ import { useToast } from "../../components/Toast";
 import { Alert, Badge, Button, CopyButton, Field, Input, Stepper, cx } from "../../components/ui";
 import { dateKo, telHref, won } from "../../lib/format";
 import Cart from "./Cart";
+import { POLICY_TITLE, PolicyBody, type PolicyKind } from "./Policy";
 import My from "./My";
 import { Pay, PayFail, PaySuccess } from "./Pay";
 import { BackToTop, LabelTable, PayGuide, PayStatus, Price, ProductArt, ReviewsSection, Row, STATUS, ShareButton, ShopSkeleton, Stars, StatusSteps, arriveText, perKg, trackUrl } from "./parts";
@@ -39,7 +40,8 @@ type Page =
   | { name: "lookup" }
   | { name: "pay"; orderId: string }
   | { name: "pay-success" }
-  | { name: "pay-fail" };
+  | { name: "pay-fail" }
+  | { name: "policy"; kind: PolicyKind };
 
 function route(pathname: string, search: string): Page {
   // 손님 주소(gayeom.vercel.app)에서는 /shop 없이 들어와요 → 안에서는 같은 이름으로 맞춰서 읽어요
@@ -47,6 +49,8 @@ function route(pathname: string, search: string): Page {
   if (isShopHost() && p !== "/shop" && !p.startsWith("/shop/")) p = `/shop${p}`;
   const m = /^\/shop\/item\/(.+)$/.exec(p);
   if (m) return { name: "item", item: decodeURIComponent(m[1]) };
+  const pol = /^\/shop\/policy\/(terms|privacy|refund)$/.exec(p);
+  if (pol) return { name: "policy", kind: pol[1] as PolicyKind };
   if (p === "/shop/pay/success") return { name: "pay-success" };
   if (p === "/shop/pay/fail") return { name: "pay-fail" };
   const pm = /^\/shop\/pay\/([^/]+)$/.exec(p);
@@ -90,7 +94,7 @@ function Shell() {
 
   // 상품·장바구니·결제는 앱처럼 '← 제목' 머리, 나머지는 가게 이름 머리
   const subTitle =
-    page.name === "item" ? page.item : page.name === "cart" ? "장바구니" : page.name === "pay" || page.name === "pay-success" || page.name === "pay-fail" ? "결제" : "";
+    page.name === "item" ? page.item : page.name === "policy" ? POLICY_TITLE[page.kind] : page.name === "cart" ? "장바구니" : page.name === "pay" || page.name === "pay-success" || page.name === "pay-fail" ? "결제" : "";
   const back = () => (window.history.length > 1 ? window.history.back() : nav(SHOP_HOME));
   const cartIcon = (
     <Link to={`${SP}/cart`} className="relative flex h-10 w-10 items-center justify-center rounded hover:bg-white/10" aria-label={`장바구니 ${s.cartCount}개`}>
@@ -149,15 +153,42 @@ function Shell() {
         {page.name === "pay" && <Pay orderId={page.orderId} />}
         {page.name === "pay-success" && <PaySuccess />}
         {page.name === "pay-fail" && <PayFail />}
-        <footer className="mt-12 border-t border-line pt-4 text-xs leading-relaxed text-stone-500">
-          <div className="font-serif text-sm font-bold text-stone-600">{s.info.factory_name}</div>
-          {s.info.factory_phone && <div>전화 {s.info.factory_phone}{s.info.contact_hours && ` (${s.info.contact_hours})`}</div>}
-        </footer>
+        {page.name === "policy" && <PolicyBody kind={page.kind} info={s.info} />}
+        <ShopFooter />
       </main>
 
       {(page.name === "home" || page.name === "item") && <BackToTop raised={page.name === "item"} />}
       {showTabs && <TabBar active={page.name} />}
     </div>
+  );
+}
+
+/** 맨 아래 사업자 정보 + 약관 링크 (쇼핑몰이면 있어야 하는 칸). 빈 값은 숨겨요 */
+function ShopFooter() {
+  const s = useShop();
+  const info = s.info!;
+  const b = info.business ?? {};
+  const rows = (["대표자", "사업자등록번호", "통신판매업 신고번호", "주소", "전화"] as const)
+    .map((k) => [k, k === "전화" && b[k] && info.contact_hours ? `${b[k]} (${info.contact_hours})` : b[k]] as const)
+    .filter(([, v]) => v);
+  return (
+    <footer className="mt-12 border-t border-line pt-5 text-[13px] leading-relaxed text-stone-500">
+      <nav className="mb-3 flex flex-wrap gap-x-4 gap-y-1 font-semibold text-stone-600" aria-label="약관">
+        <Link to={`${SP}/policy/terms`}>이용약관</Link>
+        <Link to={`${SP}/policy/privacy`} className="font-bold text-ink">개인정보처리방침</Link>
+        <Link to={`${SP}/policy/refund`}>교환·반품</Link>
+      </nav>
+      <div className="font-serif text-sm font-bold text-stone-600">{b["상호"] || info.factory_name}</div>
+      <dl className="mt-1">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex gap-2">
+            <dt className="shrink-0">{k}</dt>
+            <dd className="min-w-0 break-keep text-stone-600">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {info.pay_client_key && <p className="mt-2 text-stone-400">카드 결제는 토스페이먼츠가 처리해요.</p>}
+    </footer>
   );
 }
 
