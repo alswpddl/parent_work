@@ -59,6 +59,9 @@ function AdminApp() {
   };
   useEffect(load, []);
   useEffect(() => {
+    document.title = "공장 관리"; // 손님 주소용 미리보기 제목과 따로
+  }, []);
+  useEffect(() => {
     const onUnauthorized = () => setAuthed(false);
     window.addEventListener("api:unauthorized", onUnauthorized);
     return () => window.removeEventListener("api:unauthorized", onUnauthorized);
