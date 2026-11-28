@@ -1,14 +1,14 @@
 """카카오톡 챗봇 답변 만들기.
 
-정해진 질문에만 정해진 답을 한다 (AI 없음):
-  인사 · 상품·가격 · 상품 이름/별칭 · 주문하기 · 택배비 · 받는 날 · 입금 계좌 · 주문 조회 · 전화
-그 밖의 말에는 "잘 못 알아들었어요" + 빠른 메뉴 + 전화번호로 답하고,
-그 질문은 _기록 탭에 '챗봇 질문'으로 남겨서 부모님이 자주 묻는 걸 볼 수 있게 한다.
+정해진 질문에만 정해진 답을 한다 (AI 없음, 1:1 상담으로 넘기지 않음):
+  상품·가격 · 상품 이름/별칭 · 주문하기 · 택배비 · 받는 날 · 입금 계좌 · 전화
+메뉴는 위아래로 놓인 목록(listCard)으로 보여 준다 — 옆으로 길게 밀리는 빠른 답장 대신.
+글로 직접 물으면 "아래 메뉴에서 골라 주세요" + 메뉴. 그 글은 _기록 탭에 '챗봇 질문'으로 남는다.
+주문 조회는 챗봇에서 하지 않고 주문서 마이페이지·주문 조회 화면에서 한다.
 """
 
 from __future__ import annotations
 
-import hashlib
 import re
 from typing import Any
 
@@ -16,13 +16,19 @@ from ...core.errors import AppError
 from ...core.timeutil import fmt_date_ko
 from ...schemas.settings import WEEKDAYS_KO, closed_weekdays
 
-# 새 형식 20261126-K7Q3 (소문자·띄어쓰기도 허용) + 예전 형식 O-20261126-003
-ORDER_ID_RE = re.compile(r"(?:[Oo]-?\s?(\d{8})-?\s?(\d{3})(?!\d))|(?<!\d)(\d{8})\s?-\s?([2-9A-HJKMNP-Za-hjkmnp-z]{4})(?![0-9A-Za-z])")
-QUICK = ["상품·가격", "주문하기", "택배비", "받는 날", "주문 조회", "입금 계좌", "전화 연결"]
+# 세로 메뉴 (listCard 항목은 최대 5개) — (보이는 이름, 누르면 보내는 말, 한 줄 설명)
+MENU: list[tuple[str, str, str]] = [
+    ("상품·가격", "상품·가격", "어떤 젓갈이 있고 얼마인지"),
+    ("주문하기", "주문하기", "주문서 열기"),
+    ("택배비", "택배비", "택배비와 무료 기준"),
+    ("받는 날", "받는 날", "주문하면 언제 받는지"),
+    ("입금 계좌", "입금 계좌", "계좌로 입금할 때"),
+]
+MENU_WORDS = ("메뉴", "처음으로", "처음")
 
 # 질문 종류 → 알아듣는 말 (앞에 있을수록 먼저)
 INTENTS: list[tuple[str, tuple[str, ...]]] = [
-    ("lookup", ("주문 조회", "주문조회", "조회", "송장", "배송 조회", "어디쯤", "언제 와", "언제와", "도착", "출발했", "보냈", "내 주문")),
+    ("menu", MENU_WORDS),
     ("order", ("주문하기", "주문할", "주문 할", "주문하고", "사고 싶", "살게", "구매", "구입", "보내 주세요", "보내주세요", "주문서")),
     ("account", ("계좌", "입금", "송금", "이체", "통장")),
     ("shipping", ("택배비", "배송비", "배달비", "무료배송", "무료 배송", "택배")),
@@ -34,8 +40,16 @@ INTENTS: list[tuple[str, tuple[str, ...]]] = [
 
 
 def _quick(labels: list[str] | None = None) -> list[dict]:
-    return [{"label": l, "action": "message", "messageText": l} for l in (labels or QUICK)][:10]
+    return [{"label": l, "action": "message", "messageText": l} for l in (labels or ["메뉴 보기"])][:10]
 
+
+def menu_out(title: str, buttons: list[dict]) -> dict:
+    """세로 메뉴 카드: 질문 5개가 위아래로, 아래에 전화·주문서 버튼"""
+    return {"listCard": {
+        "header": {"title": title[:50]},
+        "items": [{"title": t, "description": d, "action": "message", "messageText": m} for t, m, d in MENU][:5],
+        "buttons": buttons[:2],
+    }}
 
 def text_out(text: str) -> dict:
     return {"simpleText": {"text": text[:1000]}}
@@ -45,8 +59,12 @@ def card_out(title: str, desc: str, buttons: list[dict]) -> dict:
     return {"textCard": {"title": title[:50], "description": desc[:400], "buttons": buttons[:3]}}
 
 
-def respond(*outputs: dict, quick: list[str] | None = None) -> dict:
-    return {"version": "2.0", "template": {"outputs": list(outputs)[:3] or [text_out("…")], "quickReplies": _quick(quick)}}
+def respond(*outputs: dict, quick: list[str] | None = None, menu: bool = False) -> dict:
+    """답변 + 아래에 [메뉴 보기] 버튼 하나 (메뉴 자체를 보여 줄 땐 빠른 답장 없음)"""
+    tpl: dict[str, Any] = {"outputs": list(outputs)[:3] or [text_out("…")]}
+    if not menu:
+        tpl["quickReplies"] = _quick(quick)
+    return {"version": "2.0", "template": tpl}
 
 
 class KakaoBot:
@@ -60,7 +78,7 @@ class KakaoBot:
         user = str((req.get("user") or {}).get("id") or "")
         intent = self.classify(text)
         # 상품 이름이 나오면 (가격·주문 질문이어도) 그 상품을 먼저 보여 준다
-        if intent in (None, "products", "hello", "order"):
+        if intent in (None, "products", "order"):
             product = self._product_answer(text)
             if product:
                 return product
@@ -72,8 +90,6 @@ class KakaoBot:
     @staticmethod
     def classify(text: str) -> str | None:
         t = text.lower().replace("?", "").strip()
-        if ORDER_ID_RE.search(text):
-            return "lookup"
         for intent, words in INTENTS:
             if any(w in t for w in words):
                 return intent
@@ -100,13 +116,21 @@ class KakaoBot:
             return None  # 웹 주문서 꺼짐
 
     # ---------------------------------------------------------------- 규칙 답변
+    def _menu_card(self, title: str = "무엇이 궁금하세요?") -> dict:
+        st = self.ctx.settings.load()
+        buttons = self._phone_btn(st)[:1] + [{"label": "주문서 열기", "action": "webLink", "webLinkUrl": self._shop_url()}]
+        return menu_out(title, buttons)
+
     def _hello(self, text: str, user: str) -> dict:
         st = self.ctx.settings.load()
         hi = f"안녕하세요, {st.factory_name or '저희 공장'}이에요 😊"
         if st.shop_intro:
             hi += f"\n{st.shop_intro}"
-        hi += "\n\n궁금한 걸 편하게 물어보세요. 아래 버튼을 눌러도 돼요."
-        return respond(text_out(hi))
+        hi += "\n\n아래 메뉴에서 궁금한 걸 눌러 주세요."
+        return respond(text_out(hi), self._menu_card(), menu=True)
+
+    def _menu(self, text: str, user: str) -> dict:
+        return respond(self._menu_card(), menu=True)
 
     def _products(self, text: str, user: str) -> dict:
         info = self._shop_info()
@@ -220,49 +244,24 @@ class KakaoBot:
     def _phone(self, text: str, user: str) -> dict:
         st = self.ctx.settings.load()
         if not st.factory_phone:
-            return respond(text_out("이 채팅으로 남겨 주시면 확인하고 연락드릴게요."))
+            return respond(text_out("전화번호가 아직 등록되지 않았어요. 주문서에서 주문해 주세요."))
         hours = f"\n문의 시간: {st.contact_hours}" if st.contact_hours else ""
         return respond(card_out(
             "☎ 전화 상담",
-            f"{st.factory_name} {st.factory_phone}{hours}\n바쁠 때는 못 받을 수 있어요. 채팅 남겨 주시면 연락드려요.",
+            f"{st.factory_name} {st.factory_phone}{hours}\n바쁠 때는 못 받을 수 있어요. 조금 뒤 다시 걸어 주세요.",
             self._phone_btn(st),
         ))
 
-    def _lookup(self, text: str, user: str) -> dict:
-        m = ORDER_ID_RE.search(text)
-        tail = re.findall(r"(?<!\d)(\d{4})(?!\d)", ORDER_ID_RE.sub(" ", text))
-        if not m or not tail:
-            return respond(
-                text_out("📦 주문번호와 휴대폰 번호 뒤 4자리를 같이 보내 주세요.\n예) 20261126-K7Q3 5678\n\n가입하셨으면 주문서 마이페이지에서 모든 주문을 볼 수 있어요."),
-                card_out("마이페이지", "로그인하면 주문 내역·입금·송장을 한 번에 봐요.", [
-                    {"label": "마이페이지", "action": "webLink", "webLinkUrl": self._shop_url("/my")},
-                ]),
-            )
-        oid = f"O-{m.group(1)}-{m.group(2)}" if m.group(1) else f"{m.group(3)}-{m.group(4).upper()}"
-        key = "kakao:" + hashlib.sha256(user.encode()).hexdigest()[:16] if user else "kakao"
-        try:
-            o = self.ctx.services["web_order"].lookup(oid, tail[-1], key)
-        except AppError as e:
-            return respond(text_out(f"😥 {e.message}"))
-        status = {"접수": "주문 확인·준비 중이에요", "출고대기": "포장 끝, 곧 보내요", "출고완료": "보냈어요 🚚", "취소": "취소된 주문이에요"}.get(o.status, o.status)
-        msg = f"📦 {o.order_id}\n{status}\n\n품목: {o.items}\n받는 날: {o.due_date}\n입금: {'확인됐어요 ✔' if o.paid else '확인 전이에요'}"
-        outs = [text_out(msg)]
-        if o.tracking_no:
-            outs.append(card_out(f"{o.carrier} {o.tracking_no}", "배송 위치를 확인해 보세요.", [
-                {"label": "배송 조회", "action": "webLink",
-                 "webLinkUrl": f"https://search.naver.com/search.naver?query={_url(o.carrier + ' ' + o.tracking_no)}"},
-            ]))
-        return respond(*outs)
-
     # ---------------------------------------------------------------- 정해진 질문이 아닐 때
     def _free(self, text: str, user: str) -> dict:
+        """글로 직접 물어본 경우 — 상담으로 넘기지 않고 메뉴만 다시 보여 준다"""
         st = self.ctx.settings.load()
         if text:
             self.ctx.logs.write("챗봇 질문", "카카오톡", text[:200], actor="챗봇")
-        msg = "질문을 잘 못 알아들었어요 🙏\n아래 버튼에서 골라 주세요."
+        msg = "이 채팅은 글로 답해 드리지 않아요 🙏\n아래 메뉴에서 골라 주세요."
         if st.factory_phone:
             msg += f"\n그 밖의 문의는 {st.factory_phone} 로 전화 주세요."
-        return respond(text_out(msg))
+        return respond(text_out(msg), self._menu_card("메뉴"), menu=True)
 
 
 def _url(s: str) -> str:
