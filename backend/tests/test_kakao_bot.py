@@ -21,12 +21,25 @@ def _setup(ctx):
     ctx.settings.save(SettingsPatch(shop_shipping_fee=4000, shop_free_shipping_over=50000, shop_intro="통영에서 30년"))
 
 
-def test_response_shape_and_quick_replies(full_ctx):
+def _menu(r):
+    cards = [o["listCard"] for o in r["template"]["outputs"] if "listCard" in o]
+    return cards[0] if cards else None
+
+
+def test_greeting_shows_vertical_menu(full_ctx):
     r = _ask(full_ctx, "안녕하세요")
     assert r["version"] == "2.0" and 1 <= len(r["template"]["outputs"]) <= 3
-    labels = [q["label"] for q in r["template"]["quickReplies"]]
-    assert "주문하기" in labels and len(labels) <= 10 and all(len(l) <= 14 for l in labels)
+    m = _menu(r)
+    titles = [i["title"] for i in m["items"]]
+    assert titles == ["상품·가격", "주문하기", "택배비", "받는 날", "입금 계좌"] and len(m["buttons"]) <= 2
+    assert "주문 조회" not in titles
+    assert all(i["action"] == "message" for i in m["items"])
+    assert "quickReplies" not in r["template"]  # 옆으로 긴 빠른 답장 없음
     assert "안녕하세요" in _texts(r)
+    # 다른 답변 아래엔 [메뉴 보기] 하나만
+    r = _ask(full_ctx, "택배비")
+    assert [q["label"] for q in r["template"]["quickReplies"]] == ["메뉴 보기"]
+    assert _menu(_ask(full_ctx, "메뉴 보기"))
 
 
 def test_rule_answers(full_ctx):
@@ -53,23 +66,16 @@ def test_product_name_and_alias(full_ctx):
     assert "/shop/item/" in r["template"]["outputs"][1]["textCard"]["buttons"][0]["webLinkUrl"]
 
 
-def test_order_lookup(full_ctx):
-    from app.modules.q2_web_order.service import GuestOrderIn
-    from app.schemas.order import OrderItemIn
-
-    out = full_ctx.services["web_order"].place(GuestOrderIn(
-        name="김영희", phone="010-7777-8888", address="서울시 마포구 1", items=[OrderItemIn(sku="SES-18L", qty=1)], agree_privacy=True,
-    ), "1.1.1.1")
-    assert "뒤 4자리" in _texts(_ask(full_ctx, "주문 조회"))
-    t = _texts(_ask(full_ctx, f"{out.order_id.lower()} 8888"))
-    assert out.order_id in t and "준비 중" in t
-    assert "찾지 못했어요" in _texts(_ask(full_ctx, f"{out.order_id} 1234"))
+def test_no_order_lookup_in_chat(full_ctx):
+    """주문 조회는 챗봇에서 안 함 — 글로 보내면 메뉴로"""
+    r = _ask(full_ctx, "20261126-K7Q3 8888")
+    assert _menu(r) and "글로 답해 드리지 않아요" in _texts(r)
 
 
 def test_unknown_question_gets_menu_and_is_logged(full_ctx):
     r = _ask(full_ctx, "보관은 어떻게 해요?")
-    assert "잘 못 알아들었어요" in _texts(r) and "버튼에서 골라" in _texts(r)
-    assert [q["label"] for q in r["template"]["quickReplies"]][0] == "상품·가격"
+    assert "글로 답해 드리지 않아요" in _texts(r) and "메뉴에서 골라" in _texts(r)
+    assert _menu(r)["items"][0]["title"] == "상품·가격"
     assert any(x.get("action") == "챗봇 질문" and "보관" in x.get("detail", "") for x in full_ctx.logs.rows(fresh=True))
 
 
@@ -83,4 +89,4 @@ def test_never_calls_ai(full_ctx):
             raise AssertionError("챗봇은 AI 를 부르면 안 돼요")
 
     full_ctx.claude = ClaudeClient("", "m", client=SimpleNamespace(messages=Boom()))
-    assert "잘 못 알아들었어요" in _texts(_ask(full_ctx, "보관은 어떻게 해요?"))
+    assert "글로 답해 드리지 않아요" in _texts(_ask(full_ctx, "보관은 어떻게 해요?"))
