@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Clock, ClipboardPaste, Package, PhoneCall, Send, Truck } from "lucide-react";
 import { briefingPreview, briefingSend, getBoard, kakaoStatus, listInventory, productionSummary, reorderReminders } from "../api/endpoints";
+import { PushBanner } from "../components/PushCard";
 import { useToast } from "../components/Toast";
 import { Alert, Badge, Button, Card, Empty, LoadState, PageHeader } from "../components/ui";
 import { useFeatures } from "../lib/features";
@@ -30,6 +31,8 @@ export default function Home() {
   return (
     <div>
       <PageHeader title={`${today.getMonth() + 1}월 ${today.getDate()}일 오늘 할 일`} subtitle="출고 대기 주문과 만들 물량을 한눈에 봐요." />
+
+      <PushBanner />
 
       {has("q2_briefing") && features?.integrations.kakao && kakao.data && !kakao.data.connected && (
         <Alert tone="warn" action={<Link to="/settings?tab=kakao"><Button size="sm">카카오 연결</Button></Link>}>

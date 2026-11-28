@@ -8,6 +8,7 @@ anthropic>=0.40
 openpyxl>=3.1
 reportlab>=4.0             # 4분기 거래명세표 PDF
 PyJWT>=2.8
+cryptography>=42         # 휴대폰 알림(웹 푸시) 암호화 · ES256 서명
 python-multipart>=0.0.9   # 3분기 엑셀 업로드용
 python-dotenv>=1.0
 

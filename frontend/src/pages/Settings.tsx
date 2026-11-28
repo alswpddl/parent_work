@@ -30,6 +30,7 @@ import {
   updateProduct,
 } from "../api/endpoints";
 import type { AppSettings, Customer, Product, SystemStatus } from "../api/types";
+import { PushCard } from "../components/PushCard";
 import { useToast } from "../components/Toast";
 import { Alert, Badge, Button, Card, ConfirmButton, CopyButton, Empty, Field, Input, LoadState, Modal, PageHeader, Segmented, Select, Textarea, Toggle } from "../components/ui";
 import { useFeatures } from "../lib/features";
@@ -582,6 +583,7 @@ function KakaoTab() {
 
   return (
     <div>
+      <PushCard />
       {has("q2_briefing") && (
         <Card title={<span><MessageCircle className="mr-1 inline h-5 w-5" />부모님 카톡 (나에게 보내기)</span>}>
           <LoadState loading={status.loading} error={status.error} />

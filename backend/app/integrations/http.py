@@ -42,11 +42,13 @@ def http_request(
     headers: dict[str, str] | None = None,
     form: dict[str, Any] | None = None,
     json_body: Any = None,
+    data: bytes | None = None,
     timeout: float = 15.0,
 ) -> HttpResponse:
     hdrs = dict(headers or {})
-    data: bytes | None = None
-    if form is not None:
+    if data is not None:
+        pass  # 이미 만들어진 바이트 본문 (웹 푸시 암호문)
+    elif form is not None:
         data = urllib.parse.urlencode({k: v for k, v in form.items() if v is not None}).encode()
         hdrs.setdefault("Content-Type", "application/x-www-form-urlencoded;charset=utf-8")
     elif json_body is not None:

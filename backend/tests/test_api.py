@@ -239,3 +239,17 @@ def test_kakao_skill_requires_key(client):
     r = client.post("/api/kakao/skill?key=s3cret", json=body)
     assert r.status_code == 200 and r.json()["version"] == "2.0"
     assert client.get("/api/system/status").json()["kakao_bot"]["skill_url"].endswith("/api/kakao/skill?key=s3cret")
+
+
+def test_push_api(client):
+    from tests.test_webpush import Phone
+
+    phone = Phone()
+    st = client.post("/api/push/status", json={"endpoint": phone.endpoint}).json()
+    assert st["devices"] == 0 and st["subscribed"] is False and len(st["public_key"]) > 80
+    r = client.post("/api/push/subscribe", json={"endpoint": phone.endpoint, "keys": phone.keys, "label": "아버지 폰"})
+    assert r.status_code == 200 and r.json()["subscribed"] is True
+    assert client.post("/api/push/status", json={"endpoint": phone.endpoint}).json()["devices"] == 1
+    assert client.post("/api/push/unsubscribe", json={"endpoint": phone.endpoint}).json()["devices"] == 0
+    bad = client.post("/api/push/subscribe", json={"endpoint": "http://x.example/aaaaaaaa", "keys": phone.keys})
+    assert bad.status_code == 422

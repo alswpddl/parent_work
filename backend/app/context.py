@@ -19,6 +19,7 @@ from .integrations.http import HttpFunc, http_request
 from .integrations.kakao import KakaoClient
 from .integrations.mailer import Mailer
 from .integrations.notifier import OwnerNotifier
+from .integrations.webpush import WebPushClient
 from .integrations.solapi import SolapiClient
 from .repositories.customers import CustomerRepo
 from .repositories.logs import LogRepo
@@ -52,6 +53,7 @@ class AppContext:
     mailer: Mailer
     notifier: OwnerNotifier
     orders: OrderService
+    push: WebPushClient | None = None
     login_limiter: LoginLimiter = field(default_factory=LoginLimiter)
     enabled_modules: list[str] = field(default_factory=list)
     startup_report: dict = field(default_factory=dict)
@@ -99,6 +101,7 @@ def build_context(
     messages = MessageLogRepo(system_sheets, msg_spec)
     bus = EventBus()
 
+    push = WebPushClient(tokens, subject=config.public_web_url, http=http)
     kakao = KakaoClient(
         rest_api_key=config.kakao_rest_api_key,
         client_secret=config.kakao_client_secret,
@@ -143,7 +146,8 @@ def build_context(
         kakao=kakao,
         solapi=solapi,
         mailer=mailer,
-        notifier=OwnerNotifier(kakao, messages, config.public_web_url),
+        notifier=OwnerNotifier(kakao, messages, config.public_web_url, push=push),
+        push=push,
         orders=service,
         system_tab_specs=(tok_spec, msg_spec),
     )
