@@ -140,6 +140,7 @@ class OrderOut(BaseModel):
     total_amount: int | None = None
     shipping_fee: int = 0
     shipped_at: datetime | None = None
+    delivered_at: datetime | None = None  # 도착 (출고완료 뒤 단계)
     paid_at: datetime | None = None  # 입금 확인 시각 (웹 주문)
     pay_method: str = ""  # 온라인 결제 수단 (카드·간편결제…), 계좌입금이면 빈칸
     pay_key: str = ""  # 토스페이먼츠 paymentKey

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Bell, Banknote, PackageCheck, Pencil, Phone, RotateCcw, XCircle } from "lucide-react";
 import { errorMessage } from "../api/client";
 import { MessageLogList } from "./MessageLogList";
-import { cancelOrder, getSettings, listCustomers, listMessages, listProducts, notifyResend, setOrderPaid, shipOrder, unshipOrder, updateOrder } from "../api/endpoints";
+import { cancelOrder, getSettings, listCustomers, listMessages, listProducts, notifyResend, setOrderPaid, setDelivered, shipOrder, unshipOrder, updateOrder } from "../api/endpoints";
 import type { Order } from "../api/types";
 import { useFeatures } from "../lib/features";
 import { dateKo, dateTimeKo, kg, telHref, won } from "../lib/format";
@@ -38,6 +38,7 @@ export default function OrderDetail({ order, onClose, onChanged }: { order: Orde
       title={
         <span className="flex flex-wrap items-center gap-2">
           {order.customer_name} <MethodBadge method={order.ship_method} /> <StatusBadge status={order.status} />
+          {order.delivered_at && <Badge tone="green">도착</Badge>}
         </span>
       }
       footer={
@@ -54,9 +55,20 @@ export default function OrderDetail({ order, onClose, onChanged }: { order: Orde
               </Button>
             )}
             {order.status === "출고완료" && (
+              <>
+              {order.delivered_at ? (
+                <Button variant="ghost" loading={busy === "deliv"} onClick={() => act("deliv", () => setDelivered(order.order_id, false), "도착 표시를 지웠어요.")}>
+                  도착 취소
+                </Button>
+              ) : (
+                <Button variant="soft" loading={busy === "deliv"} onClick={() => act("deliv", () => setDelivered(order.order_id, true), "도착으로 바꿨어요.")}>
+                  도착했어요
+                </Button>
+              )}
               <Button variant="ghost" icon={<RotateCcw className="h-5 w-5" />} loading={busy === "unship"} onClick={() => act("unship", () => unshipOrder(order.order_id), "대기로 되돌렸어요.")}>
                 대기로 되돌리기
               </Button>
+              </>
             )}
             {!closed && (
               <Button variant="ghost" icon={<Pencil className="h-5 w-5" />} onClick={() => setEditing(true)}>
@@ -172,6 +184,7 @@ export default function OrderDetail({ order, onClose, onChanged }: { order: Orde
           {order.tracking_no && <KV k="송장" v={`${order.carrier} ${order.tracking_no}`} />}
           {order.truck_no && <KV k="차량" v={`${order.truck_no} ${order.driver_phone}`} />}
           {order.shipped_at && <KV k="출고" v={dateTimeKo(order.shipped_at)} />}
+          {order.delivered_at && <KV k="도착" v={dateTimeKo(order.delivered_at)} />}
           {order.notified_at && <KV k="알림톡" v={dateTimeKo(order.notified_at)} />}
           {order.settlement_id && <KV k="정산" v={order.settlement_id} />}
           {order.raw_text && (

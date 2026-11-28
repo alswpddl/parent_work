@@ -35,6 +35,7 @@ SETTING_DEFS: list[tuple[str, str, str, str]] = [
     ("mail_order_no", "통신판매업 신고번호", "", "주문서 맨 아래 사업자 정보에 표시 (예: 제2026-경남통영-0000호). 신고 면제면 비워 두기"),
     ("privacy_officer", "개인정보 보호책임자", "", "개인정보처리방침에 표시 (예: 최갑열 055-641-6882). 비우면 대표자·공장 전화"),
     ("refund_policy", "교환·반품 안내", "", "주문서 '교환·반품' 페이지 본문. 비우면 기본 문구(식품 기준)가 보여요"),
+    ("auto_delivered_days", "자동 도착 처리(일)", "3", "출고하고 이 날짜가 지나도 손님이 '잘 받았어요'를 안 누르면 도착으로. 0 이면 끔"),
     ("closed_days", "받는 날로 못 고르는 요일", "일", "쉼표로 (예: 일 또는 토,일). 택배가 쉬는 날. 없으면 '없음'"),
     # --- 3분기: 알림톡
     ("notify_customers", "거래처 출고 알림톡 보내기", "예", "예 / 아니오"),
@@ -87,6 +88,7 @@ class AppSettings(BaseModel):
     company_biz_type: str = "제조"
     company_biz_item: str = "식품"
     mail_order_no: str = ""
+    auto_delivered_days: int = Field(default=3, ge=0, le=30)
     privacy_officer: str = ""
     refund_policy: str = ""
     bank_account: str = ""
@@ -138,6 +140,7 @@ class SettingsPatch(BaseModel):
     company_biz_type: str | None = None
     company_biz_item: str | None = None
     mail_order_no: str | None = Field(default=None, max_length=60)
+    auto_delivered_days: int | None = Field(default=None, ge=0, le=30)
     privacy_officer: str | None = Field(default=None, max_length=80)
     refund_policy: str | None = Field(default=None, max_length=3000)
     bank_account: str | None = None

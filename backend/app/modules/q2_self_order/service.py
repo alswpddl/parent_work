@@ -72,6 +72,7 @@ class PublicOrderOut(BaseModel):
     tracking_no: str = ""
     truck_no: str = ""
     paid: bool = False  # 입금 확인됨
+    delivered: bool = False  # 도착 (손님이 받았어요를 눌렀거나 자동)
 
 
 def to_public(o: OrderOut) -> PublicOrderOut:
@@ -86,6 +87,7 @@ def to_public(o: OrderOut) -> PublicOrderOut:
         tracking_no=o.tracking_no,
         truck_no=o.truck_no,
         paid=o.paid_at is not None,
+        delivered=o.delivered_at is not None,
     )
 
 

@@ -5,6 +5,7 @@ import { ChevronDown, CreditCard, LogOut, MapPin, PenLine, RotateCcw, XCircle } 
 import { apiUrl, errorMessage } from "../../api/client";
 import {
   shopCancelOrder,
+  shopReceived,
   shopChangePassword,
   shopKakaoComplete,
   shopLogin,
@@ -17,7 +18,7 @@ import type { MyOrder } from "../../api/types";
 import { useToast } from "../../components/Toast";
 import { Alert, Button, Empty, Field, Input, Modal, Segmented, Spinner, Textarea, cx } from "../../components/ui";
 import { won } from "../../lib/format";
-import { AddressField, PayGuide, PayStatus, STATUS, StarPicker, StatusSteps, joinAddress, trackUrl, type Address } from "./parts";
+import { AddressField, PayGuide, PayStatus, StarPicker, StatusSteps, stepLabel, joinAddress, trackUrl, type Address } from "./parts";
 import { MOBILE_RE, digits, formatPhone, useShop } from "./store";
 import { SHOP_HOME, SP } from "../../lib/host";
 
@@ -249,13 +250,14 @@ function MyPage() {
   );
 }
 
-type OrderFilter = "all" | "unpaid" | "preparing" | "sent" | "review" | "canceled";
+type OrderFilter = "all" | "unpaid" | "preparing" | "sent" | "arrived" | "review" | "canceled";
 /** 주문 목록 위 상태 칩 (쿠팡 주문목록의 '배송 중·배송 완료' 거르기와 같은 역할) */
 const FILTERS: { value: OrderFilter; label: string; test: (o: MyOrder) => boolean }[] = [
   { value: "all", label: "전체", test: () => true },
   { value: "unpaid", label: "입금 전", test: (o) => !o.paid && o.status !== "취소" },
   { value: "preparing", label: "준비 중", test: (o) => o.paid && (o.status === "접수" || o.status === "출고대기") },
-  { value: "sent", label: "보냄", test: (o) => o.status === "출고완료" },
+  { value: "sent", label: "보냄", test: (o) => o.status === "출고완료" && !o.delivered },
+  { value: "arrived", label: "도착", test: (o) => o.status === "출고완료" && !!o.delivered },
   { value: "review", label: "후기 쓸 주문", test: (o) => o.reviewable.length > 0 },
   { value: "canceled", label: "취소", test: (o) => o.status === "취소" },
 ];
@@ -328,17 +330,16 @@ function Orders() {
       </div>
       {shown.length === 0 && <Empty>이 상태의 주문은 없어요.</Empty>}
       {shown.map((o) => {
-        const st = STATUS[o.status] ?? { label: o.status, tone: "violet" as const, step: 1 };
         return (
           <div key={o.order_id} className={cx("rounded-lg border bg-white p-4", !o.paid && o.status !== "취소" ? "border-red-200" : "border-line")}>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className={cx("text-lg font-extrabold", o.status === "취소" ? "text-stone-400" : "text-brand-dark")}>{st.label}</span>
+              <span className={cx("text-lg font-extrabold", o.status === "취소" ? "text-stone-400" : "text-brand-dark")}>{stepLabel(o.status, o.paid, o.delivered)}</span>
               <PayStatus paid={o.paid} status={o.status} />
             </div>
             <div className="mt-0.5 text-sm text-stone-500">
               주문 {o.created_at} · 받는 날 {o.due_date} · {o.order_id}
             </div>
-            {o.status !== "취소" && <div className="mt-3"><StatusSteps status={o.status} paid={o.paid} /></div>}
+            {o.status !== "취소" && <div className="mt-3"><StatusSteps status={o.status} paid={o.paid} delivered={o.delivered} /></div>}
             <ul className="mt-3 space-y-0.5">
               {o.lines.map((l) => (
                 <li key={l.sku + l.name} className="flex justify-between gap-2">
@@ -380,6 +381,22 @@ function Orders() {
               </div>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
+              {o.status === "출고완료" && !o.delivered && (
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    try {
+                      await shopReceived(o.order_id, { token: s.auth!.token });
+                      toast("받으셨군요! 후기를 남겨 주시면 큰 힘이 돼요.");
+                      void reload();
+                    } catch (e) {
+                      toast(errorMessage(e), "error");
+                    }
+                  }}
+                >
+                  잘 받았어요
+                </Button>
+              )}
               <Button size="sm" variant="soft" icon={<RotateCcw className="h-4 w-4" />} onClick={() => reorder(o)}>다시 주문하기</Button>
               {o.can_cancel && (
                 <Button size="sm" variant="ghost" icon={<XCircle className="h-4 w-4" />} onClick={() => cancel(o)}>주문 취소</Button>

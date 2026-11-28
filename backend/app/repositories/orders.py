@@ -12,7 +12,7 @@ from ..schemas.order import OrderLineOut, OrderOut
 # 주문 단위로 모든 라인에 같은 값이 들어가는 열 (헤더 필드)
 HEADER_FIELDS = (
     "created_at", "source", "customer_id", "customer_name", "order_kg", "ship_method", "method_by",
-    "recipient", "phone", "address", "zipcode", "due_date", "note", "status", "shipped_at",
+    "recipient", "phone", "address", "zipcode", "due_date", "note", "status", "shipped_at", "delivered_at",
     "carrier", "tracking_no", "truck_no", "driver_phone", "notified_at", "ext_order_no",
     "stock_deducted", "settlement_id", "updated_at", "shipping_fee", "paid_at", "order_total", "pay_method", "pay_key",
 )
@@ -110,6 +110,7 @@ def to_order_out(lines: list[dict[str, Any]], *, pallets: int = 0, boxes: int = 
         pay_method=head.get("pay_method") or "",
         pay_key=head.get("pay_key") or "",
         shipped_at=head.get("shipped_at"),
+        delivered_at=head.get("delivered_at"),
         carrier=head.get("carrier", ""),
         tracking_no=head.get("tracking_no", ""),
         truck_no=head.get("truck_no", ""),

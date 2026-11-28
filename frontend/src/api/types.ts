@@ -54,6 +54,7 @@ export interface AppSettings {
   company_biz_type: string;
   company_biz_item: string;
   mail_order_no: string;
+  auto_delivered_days: number;
   privacy_officer: string;
   refund_policy: string;
   bank_account: string;
@@ -187,6 +188,7 @@ export interface Order {
   total_amount: number | null;
   shipping_fee: number;
   shipped_at: string | null;
+  delivered_at?: string | null; // 도착일시
   paid_at: string | null;
   carrier: string;
   tracking_no: string;
@@ -270,6 +272,7 @@ export interface PublicOrder {
   tracking_no: string;
   truck_no: string;
   paid: boolean;
+  delivered?: boolean; // 도착
 }
 
 export interface Briefing {
@@ -597,6 +600,7 @@ export interface MyOrder {
   order_id: string;
   created_at: string;
   status: string;
+  delivered?: boolean;
   due_date: string;
   ship_method: string;
   lines: { sku: string; name: string; qty: number; amount: number | null }[];

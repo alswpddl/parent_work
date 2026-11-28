@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Callable
 
 from ..core.errors import NotFoundError, ValidationFailed
@@ -465,11 +465,35 @@ class OrderService:
         cur = self.get(order_id, fresh=True)
         if cur.status != "출고완료":
             raise ValidationFailed("출고 완료된 주문만 되돌릴 수 있어요.")
-        self._set_status(order_id, {"status": "출고대기", "shipped_at": None})
+        self._set_status(order_id, {"status": "출고대기", "shipped_at": None, "delivered_at": None})
         out = self.get(order_id, fresh=True)
         self.logs.write("출고 되돌리기", order_id, out.customer_name, actor=actor)
         self.bus.publish("order.unshipped", {"order": out})
         return out
+
+    def mark_delivered(self, order_id: str, delivered: bool = True, *, actor: str = "관리자") -> OrderOut:
+        """도착 표시 (출고 완료된 주문만). 손님 '잘 받았어요' · 관리자 · 자동"""
+        cur = self.get(order_id, fresh=True)
+        if cur.status != "출고완료":
+            raise ValidationFailed("보낸(출고 완료) 주문만 도착으로 바꿀 수 있어요.")
+        if delivered and cur.delivered_at:
+            return cur
+        self._set_status(order_id, {"delivered_at": now() if delivered else None})
+        out = self.get(order_id, fresh=True)
+        self.logs.write("도착" if delivered else "도착 취소", order_id, out.customer_name, actor=actor)
+        return out
+
+    def auto_deliver(self, days: int) -> dict:
+        """출고하고 days 일이 지났는데 아무도 '받았어요'를 안 누른 주문 → 도착으로"""
+        if days <= 0:
+            return {"skipped": "자동 도착 꺼짐"}
+        cutoff = now() - timedelta(days=days)
+        done = []
+        for o in self.query(statuses=["출고완료"]):
+            if not o.delivered_at and o.shipped_at and o.shipped_at <= cutoff:
+                self.mark_delivered(o.order_id, actor="자동")
+                done.append(o.order_id)
+        return {"delivered": done}
 
     # 온라인 결제(카드 등) 주문을 취소할 때 먼저 환불하는 함수 — 웹 주문서 모듈이 넣어 준다
     refund_hook: "Callable[[OrderOut, str], None] | None" = None
