@@ -161,3 +161,19 @@ def backup_status(ctx: AppContext = Depends(get_ctx)) -> dict:
 @router.post("/system/backup", dependencies=[Depends(require_admin)])
 def backup_now(ctx: AppContext = Depends(get_ctx)) -> dict:
     return ctx.jobs.run("sheet_backup", ctx)
+
+
+# ---------------------------------------------------------------- 테스트 주문 정리
+class PurgeIn(BaseModel):
+    order_ids: list[str] = Field(min_length=1, max_length=500)
+    confirm: str = Field(description="실수 방지: '삭제' 라고 적어야 지워요")
+
+
+@router.post("/system/purge-orders", dependencies=[Depends(require_admin)])
+def purge(body: PurgeIn, ctx: AppContext = Depends(get_ctx)) -> dict:
+    from ..core.errors import ValidationFailed
+    from ..services.purge import purge_orders
+
+    if body.confirm.strip() != "삭제":
+        raise ValidationFailed("확인 칸에 '삭제'라고 적어 주세요.")
+    return purge_orders(ctx, body.order_ids)

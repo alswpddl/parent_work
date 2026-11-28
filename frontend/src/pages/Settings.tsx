@@ -30,12 +30,14 @@ import {
   updateProduct,
   backupNow,
   backupStatus,
+  listOrders,
+  purgeOrders,
 } from "../api/endpoints";
-import type { AppSettings, Customer, Product, SystemStatus } from "../api/types";
+import type { AppSettings, Customer, Order, Product, SystemStatus } from "../api/types";
 import { PushCard } from "../components/PushCard";
 import { DEFAULT_REFUND } from "./shop/Policy";
 import { useToast } from "../components/Toast";
-import { Alert, Badge, Button, Card, ConfirmButton, CopyButton, Empty, Field, Input, LoadState, Modal, PageHeader, Segmented, Select, Textarea, Toggle } from "../components/ui";
+import { Alert, Badge, Button, Card, ConfirmButton, CopyButton, Empty, Field, Input, LoadState, Modal, PageHeader, Segmented, Select, StatusBadge, Textarea, Toggle } from "../components/ui";
 import { useFeatures } from "../lib/features";
 import { dateKo, num, won } from "../lib/format";
 import { useAction, useAsync } from "../lib/hooks";
@@ -848,6 +850,91 @@ function BackupCard() {
   );
 }
 
+/** 시험으로 넣은 주문 지우기 — 골라서 '삭제'라고 적고 누르면 취소(재고 되돌림) 뒤 장부에서 지워요 */
+function PurgeCard() {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const list = useAsync(() => (open ? listOrders({ include_cancelled: true }) : Promise.resolve([] as Order[])), [open]);
+  const [pick, setPick] = useState<Set<string>>(new Set());
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const orders = [...(list.data ?? [])].sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+  const toggle = (id: string) => setPick((p) => {
+    const n = new Set(p);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  });
+  return (
+    <Card title="테스트 주문 정리">
+      <p className="mb-3 break-keep text-stone-600">
+        연습으로 넣은 주문을 장부에서 완전히 지워요. 먼저 취소 처리돼서 재고가 원래대로 돌아오고, 카드 결제였으면 환불돼요. 월말 정산에 들어간 주문은 지울 수 없어요.
+      </p>
+      {!open ? (
+        <Button size="md" variant="ghost" onClick={() => setOpen(true)}>주문 목록 열기</Button>
+      ) : (
+        <>
+          <LoadState loading={list.loading} error={list.error} onRetry={list.reload} />
+          {list.data && (
+            <>
+              <div className="mb-2 flex items-center justify-between gap-2 text-[15px]">
+                <span>{orders.length}건 중 <b>{pick.size}건</b> 골랐어요</span>
+                <span className="flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setPick(new Set(orders.map((o) => o.order_id)))}>전부 고르기</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setPick(new Set())}>모두 풀기</Button>
+                </span>
+              </div>
+              <div className="max-h-[360px] overflow-y-auto rounded-xl border border-line">
+                {orders.length === 0 && <p className="p-4 text-stone-500">주문이 없어요.</p>}
+                {orders.map((o) => (
+                  <label key={o.order_id} className="flex cursor-pointer items-start gap-3 border-b border-line px-3 py-2.5 last:border-0 hover:bg-stone-50">
+                    <input type="checkbox" className="mt-1 h-5 w-5 accent-brand" checked={pick.has(o.order_id)} onChange={() => toggle(o.order_id)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-x-2">
+                        <b>{o.customer_name}</b>
+                        <StatusBadge status={o.status} />
+                        <span className="text-sm text-stone-500">{o.order_id}</span>
+                      </span>
+                      <span className="block truncate text-sm text-stone-500">
+                        {o.created_at ? dateKo(String(o.created_at).slice(0, 10)) : ""} · {o.lines.map((l) => `${l.product_name} ${l.qty}`).join(", ")}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <Field label="확인" hint="실수 방지: 아래 칸에 '삭제'라고 적어야 버튼이 눌려요">
+                <Input value={confirm} placeholder="삭제" onChange={(e) => setConfirm(e.target.value)} />
+              </Field>
+              <Button
+                variant="danger"
+                block
+                loading={busy}
+                disabled={!pick.size || confirm.trim() !== "삭제"}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    const r = await purgeOrders([...pick], confirm);
+                    toast(`${r.deleted.length}건을 지웠어요.${r.skipped.length ? ` ${r.skipped.length}건은 못 지웠어요: ${r.skipped.map((x) => x.reason).join(" / ")}` : ""}`, r.skipped.length ? "error" : "ok");
+                    setPick(new Set());
+                    setConfirm("");
+                    void list.reload();
+                  } catch (e) {
+                    toast(errorMessage(e), "error");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                고른 {pick.size}건 완전히 지우기
+              </Button>
+            </>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
 function SystemTab() {
   const s = useAsync(getSystemStatus, []);
   return (
@@ -857,6 +944,7 @@ function SystemTab() {
         <>
           <GoogleCard g={s.data.google} />
           <BackupCard />
+          <PurgeCard />
           {s.data.kakao_bot && <KakaoBotCard b={s.data.kakao_bot} />}
           <TossCard />
           <Card title="연결 상태">
