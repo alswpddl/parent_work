@@ -9,6 +9,7 @@ name: jobs-cron
 
 on:
   schedule:
+    - cron: "30 18 * * *"  # 매일 03:30 KST  구글 시트 백업 (14일 보관)
     - cron: "40 21 * * *"  # 매일 06:40 KST  거래처 주문 주기 계산 (브리핑 전에)
     - cron: "0 22 * * *"   # 매일 07:00 KST  아침 브리핑 카톡
     - cron: "0 19 * * 0"   # 월요일 04:00 KST 카카오 토큰 갱신
@@ -19,7 +20,7 @@ on:
         description: "실행할 작업"
         required: true
         type: choice
-        options: [morning_briefing, reorder_scan, stock_check, kakao_token_refresh, monthly_settlement]
+        options: [morning_briefing, reorder_scan, stock_check, kakao_token_refresh, monthly_settlement, sheet_backup]
 
 jobs:
   run:
@@ -30,6 +31,7 @@ jobs:
         id: pick
         run: |
           case "${{ github.event.schedule }}" in
+            "30 18 * * *") echo "job=sheet_backup" >> "$GITHUB_OUTPUT" ;;
             "40 21 * * *") echo "job=reorder_scan" >> "$GITHUB_OUTPUT" ;;
             "0 22 * * *")  echo "job=morning_briefing" >> "$GITHUB_OUTPUT" ;;
             "0 19 * * 0")  echo "job=kakao_token_refresh" >> "$GITHUB_OUTPUT" ;;

@@ -143,3 +143,21 @@ def google_check(ctx: AppContext = Depends(get_ctx)) -> dict:
 @router.post("/jobs/{job_name}", dependencies=[Depends(require_job_secret)])
 def run_job(job_name: str, ctx: AppContext = Depends(get_ctx)) -> dict:
     return ctx.jobs.run(job_name, ctx)
+
+
+# ---------------------------------------------------------------- 시트 백업
+@router.get("/system/backup", dependencies=[Depends(require_admin)])
+def backup_status(ctx: AppContext = Depends(get_ctx)) -> dict:
+    from ..services.backup import where
+
+    job = next((j for j in ctx.jobs.list() if j.name == "sheet_backup"), None)
+    return {
+        "where": where(ctx),
+        "last_run_at": job.last_run_at.isoformat() if job and job.last_run_at else None,
+        "last_result": job.last_result if job else None,
+    }
+
+
+@router.post("/system/backup", dependencies=[Depends(require_admin)])
+def backup_now(ctx: AppContext = Depends(get_ctx)) -> dict:
+    return ctx.jobs.run("sheet_backup", ctx)

@@ -28,6 +28,8 @@ import {
   saveSettings,
   updateCustomer,
   updateProduct,
+  backupNow,
+  backupStatus,
 } from "../api/endpoints";
 import type { AppSettings, Customer, Product, SystemStatus } from "../api/types";
 import { PushCard } from "../components/PushCard";
@@ -798,6 +800,54 @@ function TossCard() {
   );
 }
 
+/** 구글 시트 매일 백업 (새벽 3시 30분 자동, 14일 보관) + 지금 백업 버튼 */
+function BackupCard() {
+  const toast = useToast();
+  const st = useAsync(backupStatus, []);
+  const [busy, setBusy] = useState(false);
+  const d = st.data;
+  const last = d?.last_result;
+  return (
+    <Card title="시트 백업">
+      <p className="mb-3 break-keep text-stone-600">
+        매일 새벽 3시 30분에 주문장·거래처·품목·저장소·후기·설정을 날짜별 탭으로 복사해 두고, 14일 지난 것은 지워요.
+      </p>
+      {d && !d.where && (
+        <Alert tone="warn">
+          백업할 시트가 아직 없어요. 구글 시트를 새로 하나 만들어 서비스 계정에 <b>편집자</b>로 공유하고, 그 시트 ID를 Render의 <b>BACKUP_SPREADSHEET_ID</b>에 넣어 주세요.
+        </Alert>
+      )}
+      {d?.where && <p className="mb-2 text-[15px]">백업 위치: <b>{d.where}</b></p>}
+      {last && (
+        <p className="mb-3 text-[15px] text-stone-600">
+          마지막 백업: {d?.last_run_at ? dateKo(d.last_run_at.slice(0, 10)) : "-"} ·{" "}
+          {last.skipped ? last.skipped : last.ok === false ? `실패 (${last.error ?? ""})` : `${last.tab} (${(last.rows ?? 0).toLocaleString("ko-KR")}줄)`}
+        </p>
+      )}
+      <Button
+        size="md"
+        variant="ghost"
+        loading={busy}
+        disabled={!d?.where}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            const r = await backupNow();
+            toast(r.skipped ? r.skipped : `백업했어요: ${r.tab}`, r.skipped ? "error" : "ok");
+            void st.reload();
+          } catch (e) {
+            toast(errorMessage(e), "error");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        지금 백업하기
+      </Button>
+    </Card>
+  );
+}
+
 function SystemTab() {
   const s = useAsync(getSystemStatus, []);
   return (
@@ -806,6 +856,7 @@ function SystemTab() {
       {s.data && (
         <>
           <GoogleCard g={s.data.google} />
+          <BackupCard />
           {s.data.kakao_bot && <KakaoBotCard b={s.data.kakao_bot} />}
           <TossCard />
           <Card title="연결 상태">

@@ -218,3 +218,12 @@ export const reorderReminders = () => api<ReorderStat[]>("/api/reorder/reminders
 export const reorderStats = () => api<ReorderStat[]>("/api/reorder/stats");
 export const reorderSnooze = (customerId: string, days: number) => api<ReorderStat>(`/api/reorder/${customerId}/snooze`, { body: { days } });
 export const reorderRecompute = () => api<{ updated: number; due: number }>("/api/reorder/recompute", { method: "POST" });
+
+// 구글 시트 백업
+export interface BackupStatus {
+  where: string;
+  last_run_at: string | null;
+  last_result: { ok?: boolean; tab?: string; rows?: number; skipped?: string; error?: string } | null;
+}
+export const backupStatus = () => api<BackupStatus>("/api/system/backup");
+export const backupNow = () => api<{ ok?: boolean; tab?: string; rows?: number; skipped?: string }>("/api/system/backup", { method: "POST" });

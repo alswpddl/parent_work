@@ -76,6 +76,7 @@ class AppConfig(BaseModel):
     # --- Google Sheets ---
     sheets_backend: Literal["memory", "gspread"] = "memory"
     spreadsheet_id: str = ""
+    backup_spreadsheet_id: str = ""  # 매일 백업을 쓸 시트 (비우면 SYSTEM_SPREADSHEET_ID 쪽)
     system_spreadsheet_id: str = ""  # 토큰·발송기록용 비공개 시트 (비우면 본 시트의 _토큰/_발송기록 탭)
     service_account_info: dict | None = None
     sheets_cache_ttl: float = 30.0
@@ -209,6 +210,7 @@ class AppConfig(BaseModel):
             sheets_backend=g("SHEETS_BACKEND", "memory"),  # type: ignore[arg-type]
             spreadsheet_id=sheet_id(g("GOOGLE_SPREADSHEET_ID", "")),
             system_spreadsheet_id=sheet_id(g("SYSTEM_SPREADSHEET_ID", "")),
+            backup_spreadsheet_id=sheet_id(g("BACKUP_SPREADSHEET_ID", "")),
             service_account_info=sa_info,
             sheets_cache_ttl=float(g("SHEETS_CACHE_TTL", "30")),
             auto_init_sheets=_bool(g("AUTO_INIT_SHEETS"), True),
