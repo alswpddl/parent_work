@@ -19,6 +19,8 @@ WebOrderService 가 이 클래스를 함께 물려받는다 (self.ctx, self.memb
 from __future__ import annotations
 
 import base64
+import json
+import time
 import hashlib
 import hmac
 import re
@@ -42,7 +44,12 @@ KAPI = "https://kapi.kakao.com"
 GAUTH = "https://accounts.google.com/o/oauth2/v2/auth"
 GTOKEN = "https://oauth2.googleapis.com/token"
 GUSER = "https://openidconnect.googleapis.com/v1/userinfo"
-PROVIDER_KO = {"kakao": "카카오", "google": "구글"}
+PROVIDER_KO = {"kakao": "카카오", "google": "구글", "naver": "네이버", "apple": "애플"}
+NAUTH = "https://nid.naver.com/oauth2.0/authorize"
+NTOKEN = "https://nid.naver.com/oauth2.0/token"
+NUSER = "https://openapi.naver.com/v1/nid/me"
+AAUTH = "https://appleid.apple.com/auth/authorize"
+ATOKEN = "https://appleid.apple.com/auth/token"
 
 
 class GuestCodeIn(BaseModel):
@@ -403,8 +410,102 @@ class ShopExtrasMixin:
         sub, name = self._google_user(code)
         return self._social_result("google", sub, name)
 
+    # ================================================================ 네이버 로그인
+    @property
+    def naver_login_enabled(self) -> bool:
+        cfg = self.ctx.config
+        return bool(getattr(cfg, "naver_client_id", "") and getattr(cfg, "naver_client_secret", ""))
+
+    @property
+    def naver_redirect(self) -> str:
+        return f"{self.ctx.config.public_api_url.rstrip('/')}/api/public/shop/auth/naver/callback"
+
+    def naver_start_url(self) -> str:
+        if not self.naver_login_enabled:
+            raise ValidationFailed("네이버 로그인이 아직 꺼져 있어요.")
+        state = sign(self._key, f"nlogin:{secrets.token_hex(8)}", 600)
+        q = {"response_type": "code", "client_id": self.ctx.config.naver_client_id, "redirect_uri": self.naver_redirect, "state": state}
+        return f"{NAUTH}?{urlencode(q)}"
+
+    def naver_callback(self, code: str, state: str) -> KakaoResult:
+        from .service import _http_of
+
+        if not (verify(self._key, state or "") or "").startswith("nlogin:"):
+            raise UnauthorizedError("로그인 시간이 지났어요. 다시 시도해 주세요.")
+        http, cfg = _http_of(self.ctx), self.ctx.config
+        r = http("POST", NTOKEN, form={"grant_type": "authorization_code", "client_id": cfg.naver_client_id,
+                                       "client_secret": cfg.naver_client_secret, "code": code, "state": state}, timeout=10)
+        data = r.json() if r.body else {}
+        if not r.ok or not isinstance(data, dict) or not data.get("access_token"):
+            raise ValidationFailed("네이버 로그인에 실패했어요. 다시 시도해 주세요.")
+        me = http("GET", NUSER, headers={"Authorization": f"Bearer {data['access_token']}"}, timeout=10)
+        info = (me.json() if me.body else {}) or {}
+        prof = info.get("response") if isinstance(info, dict) else None
+        if not me.ok or not isinstance(prof, dict) or not prof.get("id"):
+            raise ValidationFailed("네이버 회원 정보를 받지 못했어요.")
+        return self._social_result("naver", str(prof["id"]), str(prof.get("name") or prof.get("nickname") or ""))
+
+    # ================================================================ 애플 로그인
+    # 애플은 결과를 POST(form)로 돌려주고, 이름은 맨 처음 한 번만 준다. client_secret 은 .p8 키로 서명한 JWT.
+    @property
+    def apple_login_enabled(self) -> bool:
+        cfg = self.ctx.config
+        return all(getattr(cfg, k, "") for k in ("apple_client_id", "apple_team_id", "apple_key_id", "apple_private_key"))
+
+    @property
+    def apple_redirect(self) -> str:
+        return f"{self.ctx.config.public_api_url.rstrip('/')}/api/public/shop/auth/apple/callback"
+
+    def apple_start_url(self) -> str:
+        if not self.apple_login_enabled:
+            raise ValidationFailed("애플 로그인이 아직 꺼져 있어요.")
+        state = sign(self._key, f"alogin:{secrets.token_hex(8)}", 600)
+        q = {"client_id": self.ctx.config.apple_client_id, "redirect_uri": self.apple_redirect, "response_type": "code",
+             "scope": "name", "response_mode": "form_post", "state": state}
+        return f"{AAUTH}?{urlencode(q)}"
+
+    def _apple_secret(self) -> str:
+        import jwt
+
+        cfg = self.ctx.config
+        key = cfg.apple_private_key.replace("\\n", "\n").strip()
+        t = int(time.time())
+        claims = {"iss": cfg.apple_team_id, "iat": t, "exp": t + 600, "aud": "https://appleid.apple.com", "sub": cfg.apple_client_id}
+        return jwt.encode(claims, key, algorithm="ES256", headers={"kid": cfg.apple_key_id})
+
+    def apple_callback(self, code: str, state: str, user_json: str = "") -> KakaoResult:
+        from .service import _http_of
+
+        if not (verify(self._key, state or "") or "").startswith("alogin:"):
+            raise UnauthorizedError("로그인 시간이 지났어요. 다시 시도해 주세요.")
+        cfg = self.ctx.config
+        try:
+            secret = self._apple_secret()
+        except Exception as e:  # 키 모양이 틀림
+            raise ValidationFailed("애플 로그인 키가 올바르지 않아요. 관리자에게 알려 주세요.") from e
+        r = _http_of(self.ctx)("POST", ATOKEN, form={"grant_type": "authorization_code", "code": code, "client_id": cfg.apple_client_id,
+                                                     "client_secret": secret, "redirect_uri": self.apple_redirect}, timeout=10)
+        data = r.json() if r.body else {}
+        if not r.ok or not isinstance(data, dict) or not data.get("id_token"):
+            raise ValidationFailed("애플 로그인에 실패했어요. 다시 시도해 주세요.")
+        # id_token 은 애플 서버에서 (TLS 로) 직접 받은 것이라 서명 대신 받는 쪽(aud)만 확인
+        try:
+            pad = data["id_token"].split(".")[1]
+            claims = json.loads(base64.urlsafe_b64decode(pad + "=" * (-len(pad) % 4)))
+        except Exception as e:
+            raise ValidationFailed("애플 회원 정보를 받지 못했어요.") from e
+        if claims.get("aud") != cfg.apple_client_id or not claims.get("sub"):
+            raise ValidationFailed("애플 회원 정보를 받지 못했어요.")
+        name = ""
+        try:
+            n = (json.loads(user_json) if user_json else {}).get("name") or {}
+            name = f"{n.get('lastName', '')}{n.get('firstName', '')}".strip()
+        except (ValueError, AttributeError):
+            pass
+        return self._social_result("apple", str(claims["sub"]), name)
+
     def kakao_complete(self, body: KakaoCompleteIn) -> Any:
-        """처음 카카오·구글로 온 손님: 이름·번호로 가입하거나 기존 계정에 연결"""
+        """처음 카카오·구글·네이버·애플로 온 손님: 이름·번호로 가입하거나 기존 계정에 연결"""
         from .service import MOBILE_RE, AuthOut, GuestOrderIn, _attachable, _profile, digits, pretty_phone
 
         payload = verify(self._key, body.ticket) or ""

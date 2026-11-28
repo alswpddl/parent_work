@@ -32,8 +32,8 @@ export default function My() {
 
 // ================================================================ 카카오·구글 로그인에서 돌아왔을 때
 // 서버가 /my#kt=토큰 (바로 로그인) · #kn=표 (처음 → 이름·번호 입력) · #kerr=이유 로 보내 준다. 구글이면 끝에 &p=google
-type Provider = "kakao" | "google";
-const PROVIDER_KO: Record<Provider, string> = { kakao: "카카오", google: "구글" };
+type Provider = "kakao" | "google" | "naver" | "apple";
+const PROVIDER_KO: Record<Provider, string> = { kakao: "카카오", google: "구글", naver: "네이버", apple: "애플" };
 function useKakaoReturn() {
   const s = useShop();
   const toast = useToast();
@@ -41,7 +41,8 @@ function useKakaoReturn() {
   const [ticket, setTicket] = useState(state.get("kn") || "");
   const nickname = state.get("nick") || "";
   const error = state.get("kerr") || "";
-  const provider: Provider = state.get("p") === "google" ? "google" : "kakao";
+  const p = state.get("p");
+  const provider: Provider = p === "google" || p === "naver" || p === "apple" ? p : "kakao";
   useEffect(() => {
     if (window.location.hash) window.history.replaceState(null, "", window.location.pathname + window.location.search);
     const token = state.get("kt");
@@ -58,10 +59,10 @@ function useKakaoReturn() {
   return { ticket, nickname, error, provider, clear: () => setTicket("") };
 }
 
-/** 카카오·구글 로그인 버튼 — 각 회사가 정한 모양(카카오 노란색, 구글 흰 바탕 + G 표시) */
+/** 간편 로그인 버튼 — 각 회사가 정한 모양 (카카오 노랑, 구글 흰 바탕+G, 네이버 초록+N, 애플 검정) */
 function SocialButtons() {
   const s = useShop();
-  if (!s.info?.kakao_login && !s.info?.google_login) return null;
+  if (!s.info?.kakao_login && !s.info?.google_login && !s.info?.naver_login && !s.info?.apple_login) return null;
   return (
     <div className="space-y-2.5">
       {s.info?.kakao_login && (
@@ -87,6 +88,28 @@ function SocialButtons() {
             <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
           </svg>
           구글로 시작하기
+        </a>
+      )}
+      {s.info?.naver_login && (
+        <a
+          href={apiUrl("/api/public/shop/auth/naver/start")}
+          className="flex h-14 w-full items-center justify-center gap-2.5 rounded-xl bg-[#03C75A] text-[17px] font-semibold text-white"
+        >
+          <svg aria-hidden viewBox="0 0 20 20" className="h-4 w-4" fill="currentColor">
+            <path d="M13.56 10.7 6.17 0H0v20h6.44V9.3L13.83 20H20V0h-6.44z" />
+          </svg>
+          네이버로 시작하기
+        </a>
+      )}
+      {s.info?.apple_login && (
+        <a
+          href={apiUrl("/api/public/shop/auth/apple/start")}
+          className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-black text-[17px] font-semibold text-white"
+        >
+          <svg aria-hidden viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+            <path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.87-.76-1.47.02-2.83.86-3.59 2.18-1.53 2.66-.39 6.6 1.1 8.75.73 1.05 1.6 2.24 2.73 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.4 1.2-2.46-.03-.01-2.3-.88-2.32-3.5zM14.2 6.13c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.54 1.31-.56.64-1.05 1.67-.92 2.66.97.07 1.96-.49 2.56-1.21z" />
+          </svg>
+          Apple로 계속하기
         </a>
       )}
     </div>
@@ -158,7 +181,7 @@ function KakaoComplete({ ticket, nickname, provider, onCancel }: { ticket: strin
 function Auth({ kakaoError }: { kakaoError: string }) {
   const s = useShop();
   const nav = useNavigate();
-  const social = !!(s.info?.kakao_login || s.info?.google_login);
+  const social = !!(s.info?.kakao_login || s.info?.google_login || s.info?.naver_login || s.info?.apple_login);
   return (
     <div>
       <h1 className="mb-1 text-2xl font-extrabold">로그인</h1>
