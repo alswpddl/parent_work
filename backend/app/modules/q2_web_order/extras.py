@@ -158,12 +158,13 @@ class ShopExtrasMixin:
         out = self.ctx.orders.cancel(o.order_id, actor=f"손님:{o.recipient or o.customer_name}")
         self.ctx.logs.write("손님 주문 취소", o.order_id, o.customer_name, actor="웹주문서")
         try:  # 부모님께도 알림 (켜져 있으면)
-            if getattr(self.ctx, "kakao", None) and self.ctx.kakao.configured:
-                web = (self.ctx.config.public_web_url or "").rstrip("/")
-                self.ctx.kakao.send_text(
+            if getattr(self.ctx, "notifier", None):
+                self.ctx.notifier.send(
+                    "주문취소",
                     f"🙅 손님이 주문을 취소했어요\n{o.order_id} · {o.customer_name}\n"
                     + ", ".join(f"{l.product_name} {l.qty}" for l in o.lines),
-                    link_url=f"{web}/orders",
+                    path="/orders",
+                    button="주문 보기",
                 )
         except Exception:  # 알림 실패는 취소에 영향 없음
             pass

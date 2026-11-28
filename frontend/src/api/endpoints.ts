@@ -134,6 +134,17 @@ export const kakaoStatus = () => api<KakaoStatus>("/api/integrations/kakao/statu
 export const kakaoLoginUrl = () => api<{ url: string }>("/api/integrations/kakao/login-url", { method: "POST" });
 export const kakaoTest = () => api<{ sent: boolean }>("/api/integrations/kakao/test", { method: "POST" });
 export const kakaoDisconnect = () => api<void>("/api/integrations/kakao/disconnect", { method: "POST" });
+// 휴대폰 알림 (웹 푸시)
+export interface PushStatusOut {
+  public_key: string;
+  devices: number;
+  subscribed: boolean;
+}
+export const pushStatus = (endpoint: string) => api<PushStatusOut>("/api/push/status", { method: "POST", body: { endpoint } });
+export const pushSubscribe = (body: { endpoint: string; keys: { p256dh: string; auth: string }; label: string }) =>
+  api<PushStatusOut>("/api/push/subscribe", { method: "POST", body });
+export const pushUnsubscribe = (endpoint: string) => api<PushStatusOut>("/api/push/unsubscribe", { method: "POST", body: { endpoint } });
+export const pushTest = () => api<{ sent: number; failed: number; removed: number }>("/api/push/test", { method: "POST" });
 export const listMessages = (orderId?: string, limit = 100) => api<MessageLog[]>("/api/messages", { query: { order_id: orderId, limit } });
 
 // ---------------------------------------------------------------- 3분기

@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import __version__
-from .api import system
+from .api import push, system
 from .config import AppConfig
 from .context import AppContext, bootstrap, build_context
 from .core.errors import AppError
@@ -95,6 +95,7 @@ def create_app(
         return JSONResponse(status_code=500, content={"error": "server", "message": "잠깐 문제가 생겼어요. 다시 눌러 주세요."})
 
     app.include_router(system.router)
+    app.include_router(push.router)
     for spec in specs:
         spec.register(app, ctx)
     return app

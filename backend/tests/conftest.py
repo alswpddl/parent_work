@@ -94,8 +94,8 @@ class FakeHttp:
     def queue(self, url_part: str, status: int, body: dict):
         self.overrides.append((url_part, HttpResponse(status, json.dumps(body))))
 
-    def __call__(self, method, url, *, headers=None, form=None, json_body=None, timeout=15.0):
-        self.calls.append({"method": method, "url": url, "headers": headers or {}, "form": form, "json": json_body})
+    def __call__(self, method, url, *, headers=None, form=None, json_body=None, data=None, timeout=15.0):
+        self.calls.append({"method": method, "url": url, "headers": headers or {}, "form": form, "json": json_body, "data": data})
         for i, (part, resp) in enumerate(self.overrides):
             if part in url:
                 self.overrides.pop(i)
