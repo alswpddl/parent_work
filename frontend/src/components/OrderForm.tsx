@@ -1,6 +1,6 @@
 // 주문 확인·수정 폼 (카톡 정리 결과 / 직접 입력 / 주문 수정 공용)
 import { useMemo, useState } from "react";
-import { AlertTriangle, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Plus, Sparkles, Trash2 } from "lucide-react";
 import type { Candidate, Customer, Order, OrderDraft, OrderInput, Product, ShipMethod } from "../api/types";
 import { kg } from "../lib/format";
 import { Alert, Badge, Button, Field, Input, Segmented, Select, Stepper, cx } from "./ui";
@@ -101,7 +101,7 @@ export default function OrderForm({
   customers,
   products,
   thresholdKg,
-  submitLabel = "💾 주문 저장",
+  submitLabel = "주문 저장",
   onSubmit,
   onCancel,
   warnings = [],
@@ -173,7 +173,7 @@ export default function OrderForm({
       )}
       {warnings.map((w) => (
         <Alert key={w} tone="warn">
-          <AlertTriangle className="mr-1 inline h-5 w-5" /> {w}
+          {w}
         </Alert>
       ))}
 
@@ -259,7 +259,7 @@ export default function OrderForm({
           {missingWeight && <div className="text-sm text-red-700">개당중량이 없는 품목이 있어요 (기본 정보 → 품목)</div>}
         </div>
         <Badge tone={method === "화물" ? "truck" : "parcel"} className="px-4 py-2 text-lg">
-          {method === "화물" ? "🚚 화물 트럭" : "📦 택배"}
+          {method === "화물" ? "화물 트럭" : "택배"}
         </Badge>
       </div>
       <Segmented
@@ -267,8 +267,8 @@ export default function OrderForm({
         onChange={(m) => set({ ship_method: m === "auto" ? "" : (m as ShipMethod) })}
         options={[
           { value: "auto", label: "자동" },
-          { value: "택배", label: "📦 택배" },
-          { value: "화물", label: "🚚 화물" },
+          { value: "택배", label: "택배" },
+          { value: "화물", label: "화물" },
         ]}
       />
       <p className="mb-5 mt-2 text-sm text-stone-500">

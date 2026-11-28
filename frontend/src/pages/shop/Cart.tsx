@@ -338,7 +338,7 @@ export default function Cart() {
           </div>
 
           <SectionTitle>개인정보 동의</SectionTitle>
-          <div id="f-agree" className={cx("rounded-2xl border-2 bg-white p-4", errors.agree ? "border-red-300" : "border-line")}>
+          <div id="f-agree" className={cx("rounded-2xl border bg-white p-4", errors.agree ? "border-red-300" : "border-line")}>
             <label className="flex items-start gap-3">
               <input
                 type="checkbox"

@@ -18,7 +18,7 @@ export default function OrderCard({ order, onOpen, children, showMethod = true }
             {showMethod && <MethodBadge method={order.ship_method} />}
             {order.source === "웹주문서" && <Badge tone="violet">웹 주문</Badge>}
             {needsPayment(order) && <Badge tone="amber">입금 전</Badge>}
-            {order.source === "웹주문서" && order.paid_at && <Badge tone="green">입금 ✔</Badge>}
+            {order.source === "웹주문서" && order.paid_at && <Badge tone="green">입금 완료</Badge>}
             {order.status !== "접수" && <StatusBadge status={order.status} />}
             <Badge tone={late ? "red" : "gray"}>{dateKo(order.due_date)}{late ? " 지남" : ""}</Badge>
           </div>

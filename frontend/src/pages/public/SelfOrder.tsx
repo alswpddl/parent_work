@@ -1,7 +1,7 @@
 // 거래처용 모바일 주문 화면 (/order/:token) — 로그인 없음, 큰 버튼
 import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { CheckCircle2, History, RotateCcw } from "lucide-react";
+import { History, RotateCcw } from "lucide-react";
 import { errorMessage } from "../../api/client";
 import { publicForm, publicPlaceOrder, publicRecent } from "../../api/endpoints";
 import type { PublicOrder } from "../../api/types";
@@ -60,7 +60,7 @@ export default function SelfOrder() {
 
       {done && (
         <Alert tone="ok" action={<Button size="sm" variant="ghost" onClick={() => setDone(null)}>또 주문하기</Button>}>
-          <CheckCircle2 className="mr-1 inline h-5 w-5" /> 주문이 들어갔어요! ({done.order_id})
+          주문이 들어갔어요! ({done.order_id})
           <div className="text-sm">{done.items} · 받는 날 {done.due_date}</div>
         </Alert>
       )}

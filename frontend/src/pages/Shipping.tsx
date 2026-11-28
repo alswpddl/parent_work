@@ -63,8 +63,8 @@ export default function Shipping() {
         value={tab}
         onChange={(t) => setParams({ tab: t })}
         options={[
-          { value: "parcel", label: `📦 택배 ${board.data?.parcel.length ?? ""}` },
-          { value: "truck", label: `🚚 화물 ${board.data?.truck.length ?? ""}` },
+          { value: "parcel", label: `택배 ${board.data?.parcel.length ?? ""}` },
+          { value: "truck", label: `화물 ${board.data?.truck.length ?? ""}` },
           { value: "done", label: "오늘 출고" },
         ]}
       />

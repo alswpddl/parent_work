@@ -74,7 +74,7 @@ export default function Today() {
       const next = o.status === "출고대기" ? "접수" : "출고대기";
       const updated = await updateOrder(o.order_id, { status: next });
       list.setData((d) => d?.map((x) => (x.order_id === o.order_id ? updated : x)));
-      toast(next === "출고대기" ? `${o.customer_name} 다 만들었어요 ✔` : `${o.customer_name} 체크를 풀었어요`);
+      toast(next === "출고대기" ? `${o.customer_name} 다 만들었어요` : `${o.customer_name} 체크를 풀었어요`);
     }, (m) => toast(m, "error"));
 
   const d = new Date();
@@ -109,12 +109,12 @@ export default function Today() {
         <>
           {orders.some(needsPayment) && (
             <Alert tone="warn" action={<Link to="/orders"><Button size="sm" variant="ghost">주문 목록</Button></Link>}>
-              💰 입금 확인 안 된 웹 주문 {orders.filter(needsPayment).length}건 — 입금 확인 후 보내 주세요. (주문 목록에서 눌러 [입금 확인])
+              입금 확인 안 된 웹 주문 {orders.filter(needsPayment).length}건 — 입금 확인 후 보내 주세요. (주문 목록에서 눌러 [입금 확인])
             </Alert>
           )}
           {overCapacity && (
             <Alert tone="warn">
-              ⚖️ {range === "today" ? "오늘" : "내일"}까지 남은 작업 {kg(leftKg)} — 하루 최대 {kg(capacity)}
+              {range === "today" ? "오늘" : "내일"}까지 남은 작업 {kg(leftKg)} — 하루 최대 {kg(capacity)}
               {days > 1 ? ` × ${days}일` : ""}보다 많아요. 미리 만들어 두거나 받는 날을 조정해 주세요.
             </Alert>
           )}
@@ -124,9 +124,9 @@ export default function Today() {
             </Alert>
           )}
 
-          <Card title="🔨 품목별로 만들 양">
+          <Card title="품목별로 만들 양">
             {lines.length === 0 ? (
-              <Empty>{range === "today" ? "오늘 보낼 주문이 없어요. 푹 쉬세요 🙂" : "만들 주문이 없어요."}</Empty>
+              <Empty>{range === "today" ? "오늘 보낼 주문이 없어요. 푹 쉬세요." : "만들 주문이 없어요."}</Empty>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {lines.map((l) => (
@@ -148,13 +148,13 @@ export default function Today() {
 
           {(needs.data?.length ?? 0) > 0 && (
             <Card
-              title="🫙 저장고·자재 확인"
+              title="저장고·자재 확인"
               actions={<Link to="/inventory" className="no-print"><Button size="sm" variant="ghost">재고 보기</Button></Link>}
             >
               {needs.data!.some((n) => n.short > 0) ? (
                 <Alert tone="error">모자라는 게 있어요. 미리 담그거나 주문해 주세요.</Alert>
               ) : (
-                <p className="mb-2 text-brand-dark">이 주문들을 다 보내도 재고가 충분해요 ✔</p>
+                <p className="mb-2 text-brand-dark">이 주문들을 다 보내도 재고가 충분해요.</p>
               )}
               <div className="divide-y divide-dashed divide-line">
                 {needs.data!.map((n) => (
@@ -173,7 +173,7 @@ export default function Today() {
 
           {orders.length > 0 && (
             <Card
-              title={`📋 주문별 체크 (${ready}/${orders.length} 완료)`}
+              title={`주문별 체크 (${ready}/${orders.length} 완료)`}
               actions={
                 <Link to="/shipping" className="no-print">
                   <Button size="sm" variant="ghost" icon={<Truck className="h-4 w-4" />}>출고하러 가기</Button>
@@ -219,11 +219,11 @@ export default function Today() {
                           <div className="mt-1 text-sm text-stone-500">
                             받는 날 {dateKo(o.due_date)} · {kg(o.order_kg)}
                           </div>
-                          {o.note && <div className="mt-1 text-sm font-semibold text-amber-700">📝 {o.note}</div>}
+                          {o.note && <div className="mt-1 text-sm font-semibold text-amber-700">요청: {o.note}</div>}
                         </div>
                       </div>
                       <div className={cx("no-print mt-3 rounded-xl py-2.5 text-center font-bold", done ? "bg-white text-brand-dark" : "bg-brand text-white")}>
-                        {done ? "완료 ✔ (다시 누르면 풀려요)" : "다 만들었으면 누르기"}
+                        {done ? "완료 (다시 누르면 풀려요)" : "다 만들었으면 누르기"}
                       </div>
                     </button>
                   );

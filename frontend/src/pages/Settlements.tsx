@@ -151,13 +151,13 @@ function SendModal({ target, canEmail, canKakao, onClose, onSend }: { target: Se
       footer={<Button block loading={busy} disabled={!via.length} onClick={async () => { setBusy(true); try { await onSend(via); } finally { setBusy(false); } }}>보내기</Button>}
     >
       {!canEmail && !canKakao && <Alert tone="warn">메일·알림톡 설정이 없어서 보낼 수 없어요. [링크 복사]로 직접 카톡에 붙여넣어 주세요.</Alert>}
-      <label className="mb-3 flex items-center gap-3 rounded-xl border-2 border-line bg-white p-4">
+      <label className="mb-3 flex items-center gap-3 rounded-xl border border-line bg-white p-4">
         <input type="checkbox" className="h-6 w-6" checked={email} disabled={!canEmail} onChange={(e) => setEmail(e.target.checked)} />
         <span>
           <b>이메일</b> (PDF 첨부){one && !one.has_email && <span className="block text-sm text-red-700">이 거래처는 이메일이 등록되지 않았어요</span>}
         </span>
       </label>
-      <label className="mb-3 flex items-center gap-3 rounded-xl border-2 border-line bg-white p-4">
+      <label className="mb-3 flex items-center gap-3 rounded-xl border border-line bg-white p-4">
         <input type="checkbox" className="h-6 w-6" checked={kakao} disabled={!canKakao} onChange={(e) => setKakao(e.target.checked)} />
         <span>
           <b>카카오 알림톡</b> (명세표 링크){one && !one.has_phone && <span className="block text-sm text-red-700">이 거래처는 전화번호가 없어요</span>}

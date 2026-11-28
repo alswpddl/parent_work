@@ -31,7 +31,7 @@ export default function Reorder() {
       />
       <Segmented className="mb-4" value={tab} onChange={setTab} options={[{ value: "due", label: `연락할 곳 ${stats.data?.filter((s) => s.due).length ?? ""}` }, { value: "all", label: "전체 거래처" }]} />
       <LoadState loading={stats.loading} error={stats.error} onRetry={stats.reload} />
-      {!stats.loading && rows.length === 0 && <Empty>{tab === "due" ? "지금은 연락할 거래처가 없어요. 👍" : "거래처가 없어요."}</Empty>}
+      {!stats.loading && rows.length === 0 && <Empty>{tab === "due" ? "지금은 연락할 거래처가 없어요." : "거래처가 없어요."}</Empty>}
       {rows.map((s) => (
         <div key={s.customer_id} className={`mb-3 rounded-2xl border bg-white p-4 ${s.due ? "border-amber-300" : "border-line"}`}>
           <div className="flex flex-wrap items-start justify-between gap-2">

@@ -234,7 +234,7 @@ function SignupForm({ onDone, privacy }: { onDone: () => void; privacy: string }
       </div>
       <p className="mb-1 text-sm font-semibold text-stone-500">받는 주소 (나중에 적어도 돼요)</p>
       <AddressField value={addr} onChange={setAddr} />
-      <div className="mb-4 rounded-2xl border-2 border-line bg-white p-4">
+      <div className="mb-4 rounded-2xl border border-line bg-white p-4">
         <label className="flex items-start gap-3">
           <input type="checkbox" className="mt-0.5 h-6 w-6 shrink-0 accent-brand" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
           <span className="font-bold">주문·배송을 위한 개인정보 수집·이용에 동의해요 (필수)</span>
@@ -261,7 +261,7 @@ function MyPage() {
       <div className="mb-4 flex items-end justify-between gap-3 border-b-2 border-brand pb-3">
         <div className="min-w-0">
           {p.company && <div className="text-sm text-stone-500">{p.company}</div>}
-          <div className="truncate font-serif text-2xl font-bold text-brand-dark">{p.name}님</div>
+          <div className="truncate text-2xl font-bold text-ink">{p.name}님</div>
           <div className="text-sm text-stone-500">{p.phone}</div>
         </div>
         <Button size="sm" variant="ghost" className="shrink-0" icon={<LogOut className="h-4 w-4" />} onClick={() => { s.signOut(); nav("/shop"); }}>

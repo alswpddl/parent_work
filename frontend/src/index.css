@@ -13,6 +13,16 @@ html {
 body {
   @apply bg-paper text-ink antialiased;
   -webkit-tap-highlight-color: transparent;
+  letter-spacing: -0.01em;
+  word-break: keep-all; /* 한국어는 낱말 중간에서 줄 바꾸지 않기 */
+  font-feature-settings: "tnum"; /* 숫자 폭을 맞춰 금액·수량 줄이 가지런하게 */
+}
+/* 키보드로 움직일 때 지금 위치가 또렷하게 (KRDS 포커스 규칙: 흰 선 + 남색 고리) */
+:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 0;
+  box-shadow: 0 0 0 4px #173a5e;
+  border-radius: 0.375rem;
 }
 input,
 select,

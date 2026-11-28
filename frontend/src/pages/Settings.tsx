@@ -142,7 +142,7 @@ function BasicTab() {
             <div className="break-all font-bold">{shopUrl}</div>
             <div className="mt-2 flex flex-wrap gap-2">
               <CopyButton size="sm" variant="primary" label="주소 복사" text={`${v.factory_name || "저희 공장"} 주문서예요. 눌러서 주문해 주세요!\n${shopUrl}`} onCopied={(ok) => toast(ok ? "복사했어요. 카톡에 붙여넣으세요." : "복사가 막혔어요.", ok ? "ok" : "error")} />
-              <a href={shopUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-[38px] items-center rounded-xl2 border-2 border-line bg-white px-3 text-sm font-bold">미리 보기</a>
+              <a href={shopUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-[38px] items-center rounded-xl2 border border-line bg-white px-3 text-sm font-bold">미리 보기</a>
             </div>
           </div>
           <Toggle checked={v.shop_enabled} onChange={(x) => set({ shop_enabled: x })} label="웹 주문 받기 (끄면 주문서가 닫혀요)" />
@@ -281,7 +281,7 @@ function WebAccountReset({ customerId }: { customerId: string }) {
   const toast = useToast();
   const [done, setDone] = useState(false);
   return (
-    <div className="mb-3 rounded-xl border-2 border-line bg-white px-4 py-3">
+    <div className="mb-3 rounded-xl border border-line bg-white px-4 py-3">
       <div className="font-bold">웹 주문서 가입 손님</div>
       <p className="mb-2 text-sm text-stone-500">비밀번호를 잊었다고 하면 초기화해 주세요. 손님이 같은 번호로 다시 가입하면 돼요 (주문 내역은 그대로).</p>
       <ConfirmButton
@@ -589,7 +589,7 @@ function KakaoTab() {
           {st && (
             <>
               <p className="mb-3 text-lg">
-                {st.connected ? <>✅ <b>{st.nickname || "카카오 계정"}</b>과 연결돼 있어요.</> : "아직 연결되지 않았어요."}
+                {st.connected ? <><b>{st.nickname || "카카오 계정"}</b>과 연결돼 있어요.</> : "아직 연결되지 않았어요."}
               </p>
               {st.refresh_expires_at && <p className="mb-3 text-sm text-stone-500">연결 유지 기한 {dateKo(st.refresh_expires_at)} (매주 자동 연장)</p>}
               <div className="flex flex-wrap gap-2">
@@ -686,7 +686,7 @@ function GoogleCard({ g }: { g: SystemStatus["google"] }) {
   const { busy, run } = useAction();
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   return (
-    <Card title="📗 구글 시트 (데이터 저장소)">
+    <Card title="구글 시트 (데이터 저장소)">
       {g.connected ? (
         <Alert tone="ok">구글 시트에 저장하고 있어요. 서버가 꺼졌다 켜져도 주문이 그대로 남아요.</Alert>
       ) : (
@@ -724,13 +724,13 @@ const BOT_GUIDE_URL = "https://github.com/alswpddl/parent_work/blob/main/docs/�
 function KakaoBotCard({ b }: { b: SystemStatus["kakao_bot"] }) {
   const toast = useToast();
   return (
-    <Card title="💬 카카오톡 채널 챗봇">
+    <Card title="카카오톡 채널 챗봇">
       {b.enabled ? (
         <>
           <Alert tone="ok">
             챗봇 서버가 켜져 있어요. 정해진 질문에만 답하고, 그 밖의 말에는 메뉴 버튼과 전화번호를 보여 줘요.
           </Alert>
-          <div className="mb-3 rounded-xl border-2 border-line bg-white p-3">
+          <div className="mb-3 rounded-xl border border-line bg-white p-3">
             <div className="mb-2 font-bold">스킬 주소</div>
             <p className="mb-2 text-sm text-stone-500">카카오 챗봇 관리자센터 [스킬] → URL 칸에 붙여넣어요. 비밀 키가 들어 있으니 남에게 보여 주지 마세요.</p>
             <CopyButton
