@@ -76,7 +76,7 @@ export function Pay({ orderId }: { orderId: string }) {
 
   return (
     <div>
-      <h1 className="mb-1 border-b-2 border-brand pb-2 font-serif text-2xl font-bold text-brand-dark">결제하기</h1>
+      <h1 className="mb-1 border-b border-line pb-3 text-2xl font-bold text-ink">결제하기</h1>
       {info?.test_mode && (
         <Alert tone="warn">테스트 결제예요. 결제해도 실제 돈은 빠지지 않아요.</Alert>
       )}
@@ -149,7 +149,7 @@ export function PaySuccess() {
     <div>
       <div className="mb-5 border-b-2 border-brand pb-4 text-center">
         <CheckCircle2 className="mx-auto mb-2 h-12 w-12 text-green-600" />
-        <div className="font-serif text-2xl font-bold text-brand-dark">결제가 완료됐어요</div>
+        <div className="text-2xl font-bold text-ink">결제가 완료됐어요</div>
         <div className="mt-1 break-keep text-stone-600">바로 준비해서 보내 드릴게요.</div>
       </div>
       <div className="mb-4">
@@ -176,7 +176,7 @@ export function PayFail() {
   const canceled = code === "PAY_PROCESS_CANCELED" || code === "USER_CANCEL";
   return (
     <div>
-      <h1 className="mb-3 font-serif text-2xl font-bold text-brand-dark">{canceled ? "결제를 그만두셨어요" : "결제가 안 됐어요"}</h1>
+      <h1 className="mb-3 text-2xl font-bold text-ink">{canceled ? "결제를 그만두셨어요" : "결제가 안 됐어요"}</h1>
       {!canceled && <Alert tone="error">{q.get("message") || "결제 중 문제가 생겼어요."}</Alert>}
       <p className="mb-4 break-keep text-stone-600">돈은 빠져나가지 않았어요. 다시 결제하거나 계좌로 입금하셔도 돼요.</p>
       {orderId && (

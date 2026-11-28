@@ -212,7 +212,7 @@ function Home() {
     <div>
       <section className="pb-5 pt-2">
         {s.auth && <p className="mb-2 text-sm text-stone-600">{s.auth.profile.name}님, 다시 오셨네요.</p>}
-        <p className="whitespace-pre-line break-keep font-serif text-[1.6rem] font-bold leading-snug text-brand-dark">
+        <p className="whitespace-pre-line break-keep text-[1.6rem] font-bold leading-[1.35] tracking-[-0.025em] text-ink">
           {info.intro || "정성껏 담근 젓갈을\n공장에서 바로 보내 드려요."}
         </p>
       </section>
@@ -643,13 +643,13 @@ function Done() {
     <div>
       <div className="mb-5 border-b-2 border-brand pb-4 text-center">
         <CheckCircle2 className="mx-auto mb-2 h-12 w-12 text-brand" />
-        <div className="font-serif text-2xl font-bold text-brand-dark">주문이 접수됐어요</div>
+        <div className="text-2xl font-bold text-ink">주문이 접수됐어요</div>
         <div className="mt-1 break-keep text-stone-600">아래 계좌로 입금해 주시면 확인하고 바로 준비해요.</div>
       </div>
       <div className="mb-4"><StatusSteps status="접수" paid={false} /></div>
       {joined && <Alert tone="ok">가입도 끝났어요. 다음부터는 휴대폰 번호와 비밀번호로 로그인하면 돼요.</Alert>}
 
-      <div className="mb-4 rounded-2xl border-2 border-line bg-white p-5">
+      <div className="mb-4 rounded-2xl border border-line bg-white p-5">
         <div className="text-sm text-stone-500">주문번호 (조회할 때 필요해요)</div>
         <div className="mb-3 flex items-center justify-between gap-2">
           <span className="whitespace-nowrap text-xl font-extrabold sm:text-2xl">{r.order_id}</span>
@@ -743,7 +743,7 @@ function Lookup() {
       </Button>
 
       {r && st && (
-        <div className="mt-5 rounded-2xl border-2 border-line bg-white p-5">
+        <div className="mt-5 rounded-2xl border border-line bg-white p-5">
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="font-extrabold">{r.order_id}</span>
             <span className="flex items-center gap-3">

@@ -115,7 +115,7 @@ function BuildingCard({ b, onPick, onChanged }: { b: TankBuilding; onPick: (t: T
   return (
     <section className="min-w-0 rounded-lg border-2 border-brand/70 bg-white">
       <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-4 py-2.5">
-        <h2 className="font-serif text-xl font-bold text-brand-dark">{b.name}</h2>
+        <h2 className="text-xl font-bold text-ink">{b.name}</h2>
         <span className="text-sm text-stone-500">
           {kg(b.total_kg)} · 차 있음 {filled}/{b.tanks.length}
         </span>

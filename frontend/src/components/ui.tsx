@@ -1,6 +1,6 @@
 // 큰 글씨·큰 버튼 위주의 공통 UI 조각
 import { forwardRef, useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
-import { Check, Copy, Loader2, Minus, Plus, Upload, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Copy, Info, Loader2, Minus, Package, Plus, Truck, Upload, X, XCircle } from "lucide-react";
 import { copyText } from "../lib/clipboard";
 
 export function cx(...c: (string | false | null | undefined)[]): string {
@@ -13,18 +13,18 @@ type Size = "xl" | "lg" | "md" | "sm";
 
 const VARIANTS: Record<Variant, string> = {
   primary: "bg-brand text-white hover:bg-brand-dark",
-  ghost: "bg-white text-ink border-2 border-line hover:border-brand",
-  danger: "bg-white text-red-700 border-2 border-red-200 hover:bg-red-50",
+  ghost: "bg-white text-ink border border-stone-300 hover:bg-stone-50",
+  danger: "bg-white text-bad border border-[#f3c3b8] hover:bg-bad-soft",
   parcel: "bg-parcel text-white hover:brightness-110",
   truck: "bg-truck text-white hover:brightness-110",
-  soft: "bg-brand-soft text-brand-dark hover:brightness-95",
-  plain: "bg-transparent text-ink hover:bg-black/5",
+  soft: "bg-brand-soft text-brand hover:bg-[#dce5ef]",
+  plain: "bg-transparent text-ink hover:bg-stone-100",
 };
 const SIZES: Record<Size, string> = {
   xl: "min-h-[64px] px-6 text-xl",
   lg: "min-h-[56px] px-5 text-lg",
-  md: "min-h-[46px] px-4 text-base",
-  sm: "min-h-[38px] px-3 text-sm",
+  md: "min-h-[48px] px-4 text-base",
+  sm: "min-h-[40px] px-3 text-[15px]",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -42,7 +42,7 @@ export function Button({ variant = "primary", size = "lg", loading, block, icon,
       {...rest}
       disabled={disabled || loading}
       className={cx(
-        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl2 font-bold transition active:scale-[.98] disabled:opacity-50 disabled:active:scale-100",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl font-semibold transition-colors active:scale-[.98] disabled:opacity-40 disabled:active:scale-100",
         VARIANTS[variant],
         SIZES[size],
         block && "w-full",
@@ -116,14 +116,14 @@ export function Card({ title, actions, children, className, tone }: { title?: Re
   return (
     <section
       className={cx(
-        "mb-4 rounded-2xl border p-4 md:p-5",
-        tone === "warn" ? "border-amber-200 bg-amber-50" : tone === "info" ? "border-parcel/20 bg-parcel-soft" : "border-line bg-white",
+        "mb-4 rounded-2xl border p-4 shadow-card md:p-6",
+        tone === "warn" ? "border-[#f0dcae] bg-warn-soft" : tone === "info" ? "border-parcel/20 bg-parcel-soft" : "border-line bg-white",
         className,
       )}
     >
       {(title || actions) && (
-        <div className="-mx-4 mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 pb-3 md:-mx-5 md:px-5">
-          {title && <h2 className="text-lg font-extrabold">{plain(title)}</h2>}
+        <div className="-mx-4 mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 pb-3 md:-mx-6 md:px-6 md:pb-4">
+          {title && <h2 className="text-[1.05rem] font-bold text-ink">{plain(title)}</h2>}
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
         </div>
       )}
@@ -134,10 +134,10 @@ export function Card({ title, actions, children, className, tone }: { title?: Re
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
-    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3 md:mb-6">
       <div>
-        <h1 className="text-2xl font-extrabold">{plain(title)}</h1>
-        {subtitle && <p className="mt-1 text-sm text-stone-600">{subtitle}</p>}
+        <h1 className="text-[1.6rem] font-bold leading-tight tracking-[-0.02em] text-ink md:text-[1.75rem]">{plain(title)}</h1>
+        {subtitle && <p className="mt-1.5 text-[15px] text-stone-500">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
@@ -145,22 +145,28 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 }
 
 type Tone = "green" | "parcel" | "truck" | "gray" | "red" | "violet" | "amber";
+// 상태 색은 KRDS 기준(성공·경고·오류)에 맞춤. '보라'는 남색 정보 표시로.
 const TONES: Record<Tone, string> = {
-  green: "bg-brand-soft text-brand-dark",
+  green: "bg-ok-soft text-ok",
   parcel: "bg-parcel-soft text-parcel",
   truck: "bg-truck-soft text-truck",
-  gray: "bg-stone-200 text-stone-700",
-  red: "bg-red-100 text-red-700",
-  violet: "bg-violet-100 text-violet-700",
-  amber: "bg-amber-100 text-amber-800",
+  gray: "bg-stone-100 text-stone-600",
+  red: "bg-bad-soft text-bad",
+  violet: "bg-brand-soft text-brand",
+  amber: "bg-warn-soft text-warn",
 };
 
 export function Badge({ tone = "gray", children, className }: { tone?: Tone; children: ReactNode; className?: string }) {
-  return <span className={cx("inline-flex items-center gap-1 whitespace-nowrap rounded px-2.5 py-0.5 text-sm font-bold", TONES[tone], className)}>{children}</span>;
+  return <span className={cx("inline-flex items-center gap-1 whitespace-nowrap rounded px-2 py-0.5 text-[13px] font-semibold leading-5", TONES[tone], className)}>{children}</span>;
 }
 
 export function MethodBadge({ method }: { method: string }) {
-  return <Badge tone={method === "화물" ? "truck" : "parcel"}>{method === "화물" ? "🚚 화물" : "📦 택배"}</Badge>;
+  return (
+    <Badge tone={method === "화물" ? "truck" : "parcel"}>
+      {method === "화물" ? <Truck className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
+      {method === "화물" ? "화물" : "택배"}
+    </Badge>
+  );
 }
 
 export function StatusBadge({ status }: { status: string }) {
@@ -170,21 +176,25 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function Alert({ tone = "warn", children, action }: { tone?: "warn" | "info" | "error" | "ok"; children: ReactNode; action?: ReactNode }) {
   const cls = {
-    warn: "border-amber-200 bg-amber-50 text-amber-900",
-    info: "border-parcel/20 bg-parcel-soft text-parcel",
-    error: "border-red-200 bg-red-50 text-red-800",
-    ok: "border-brand/20 bg-brand-soft text-brand-dark",
+    warn: "border-[#f0dcae] bg-warn-soft text-[#5c3d00]",
+    info: "border-brand/15 bg-brand-soft text-brand-dark",
+    error: "border-[#f3c3b8] bg-bad-soft text-bad",
+    ok: "border-[#bfe0c6] bg-ok-soft text-ok",
   }[tone];
+  const Icon = { warn: AlertTriangle, info: Info, error: XCircle, ok: CheckCircle2 }[tone];
   return (
-    <div className={cx("mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl2 border px-4 py-3 text-base", cls)}>
-      <div className="min-w-0 flex-1">{children}</div>
-      {action}
+    <div className={cx("mb-3 flex flex-col gap-3 rounded-xl border px-4 py-3 text-base sm:flex-row sm:items-center sm:justify-between", cls)} role={tone === "error" ? "alert" : undefined}>
+      <div className="flex min-w-0 flex-1 gap-2.5">
+        <Icon className="mt-0.5 h-5 w-5 shrink-0" />
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
+      {action && <div className="shrink-0 self-end sm:self-auto">{action}</div>}
     </div>
   );
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <div className="rounded-2xl border border-dashed border-line px-4 py-10 text-center text-stone-500">{children}</div>;
+  return <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-10 text-center text-stone-500">{children}</div>;
 }
 
 export function Spinner({ label = "불러오는 중…" }: { label?: string }) {
@@ -202,12 +212,13 @@ export function LoadState({ loading, error, onRetry }: { loading: boolean; error
 }
 
 // ---------------------------------------------------------------- 입력
-const inputCls = "w-full rounded-xl border-2 border-line bg-white px-4 py-3 text-lg outline-none focus:border-brand";
+const inputCls =
+  "w-full min-h-[52px] rounded-xl border border-stone-300 bg-white px-4 py-3 text-lg text-ink outline-none transition-colors placeholder:text-stone-400 hover:border-stone-400 focus:border-brand focus:shadow-[0_0_0_3px_rgba(23,58,94,0.15)] disabled:bg-stone-100 disabled:text-stone-500";
 
 export function Field({ label, hint, children, className }: { label: ReactNode; hint?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <label className={cx("mb-3 block", className)}>
-      <span className="mb-1.5 block text-sm font-bold text-stone-700">{label}</span>
+      <span className="mb-1.5 block text-[15px] font-semibold text-stone-700">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-sm text-stone-500">{hint}</span>}
     </label>
@@ -228,7 +239,7 @@ export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
 
 export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: ReactNode }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="mb-3 flex w-full items-center justify-between gap-3 rounded-xl border-2 border-line bg-white px-4 py-3 text-left">
+    <button type="button" onClick={() => onChange(!checked)} className="mb-3 flex w-full items-center justify-between gap-3 rounded-xl border border-stone-300 bg-white px-4 py-3 text-left hover:bg-stone-50">
       <span className="font-semibold">{label}</span>
       <span className={cx("relative h-8 w-14 rounded-full transition", checked ? "bg-brand" : "bg-stone-300")}>
         <span className={cx("absolute top-1 h-6 w-6 rounded-full bg-white shadow transition", checked ? "left-7" : "left-1")} />
@@ -238,7 +249,7 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 }
 
 export function Stepper({ value, onChange, min = 0, max = 99999 }: { value: number; onChange: (v: number) => void; min?: number; max?: number }) {
-  const btn = "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2 border-line bg-white text-2xl font-extrabold active:scale-95";
+  const btn = "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-stone-300 bg-white text-2xl font-bold hover:bg-stone-50 active:scale-95";
   return (
     <div className="flex items-center gap-1.5">
       <button type="button" aria-label="하나 빼기" className={btn} onClick={() => onChange(Math.max(min, value - 1))}>
@@ -251,7 +262,7 @@ export function Stepper({ value, onChange, min = 0, max = 99999 }: { value: numb
         min={min}
         max={max}
         onChange={(e) => onChange(Math.min(max, Math.max(min, Math.round(Number(e.target.value) || 0))))}
-        className="h-12 w-20 rounded-xl border-2 border-line bg-white text-center text-xl font-extrabold outline-none focus:border-brand"
+        className="h-12 w-20 rounded-xl border border-stone-300 bg-white text-center text-xl font-bold outline-none focus:border-brand"
         aria-label="수량"
       />
       <button type="button" aria-label="하나 더하기" className={btn} onClick={() => onChange(Math.min(max, value + 1))}>
@@ -263,14 +274,14 @@ export function Stepper({ value, onChange, min = 0, max = 99999 }: { value: numb
 
 export function Segmented<T extends string>({ value, options, onChange, className }: { value: T; options: { value: T; label: ReactNode }[]; onChange: (v: T) => void; className?: string }) {
   return (
-    <div className={cx("flex gap-1 rounded-2xl bg-[#e3e8ed] p-1", className)} role="group">
+    <div className={cx("flex gap-1 rounded-xl bg-stone-200/70 p-1", className)} role="group">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           aria-pressed={o.value === value}
           onClick={() => onChange(o.value)}
-          className={cx("flex-1 rounded-xl px-3 py-3 text-base font-bold transition", o.value === value ? "bg-white text-ink shadow-sm" : "text-stone-500")}
+          className={cx("flex-1 rounded-lg px-3 py-2.5 text-base font-semibold transition-colors", o.value === value ? "bg-white text-ink shadow-[0_1px_3px_rgba(0,23,51,0.12)]" : "text-stone-500 hover:text-stone-700")}
         >
           {o.label}
         </button>
@@ -296,7 +307,7 @@ export function FileDrop({ onFile, accept = ".xlsx,.csv", label = "엑셀 파일
         if (f) onFile(f);
       }}
       onClick={() => ref.current?.click()}
-      className={cx("flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-8 text-center", over ? "border-brand bg-brand-soft" : "border-line bg-white")}
+      className={cx("flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-8 text-center", over ? "border-brand bg-brand-soft" : "border-stone-300 bg-white hover:bg-stone-50")}
     >
       <Upload className="h-8 w-8 text-brand" />
       <span className="font-semibold">{label}</span>
@@ -329,16 +340,16 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 md:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(25,31,40,0.5)] md:items-center" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className={cx("flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-paper md:rounded-3xl", wide ? "md:max-w-4xl" : "md:max-w-xl")}
+        className={cx("flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-white shadow-pop md:rounded-3xl", wide ? "md:max-w-4xl" : "md:max-w-xl")}
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
-          <h2 className="text-xl font-extrabold">{title}</h2>
-          <button aria-label="닫기" onClick={onClose} className="rounded-full p-2 hover:bg-black/5">
+          <h2 className="text-xl font-bold">{title}</h2>
+          <button aria-label="닫기" onClick={onClose} className="rounded-full p-2 text-stone-500 hover:bg-stone-100">
             <X className="h-6 w-6" />
           </button>
         </div>
