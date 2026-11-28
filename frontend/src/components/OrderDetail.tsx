@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Bell, Banknote, PackageCheck, Pencil, Phone, RotateCcw, XCircle } from "lucide-react";
 import { errorMessage } from "../api/client";
+import { MessageLogList } from "./MessageLogList";
 import { cancelOrder, getSettings, listCustomers, listMessages, listProducts, notifyResend, setOrderPaid, shipOrder, unshipOrder, updateOrder } from "../api/endpoints";
 import type { Order } from "../api/types";
 import { useFeatures } from "../lib/features";
@@ -182,15 +183,7 @@ export default function OrderDetail({ order, onClose, onChanged }: { order: Orde
           {(logs.data?.length ?? 0) > 0 && (
             <div className="mt-4">
               <h3 className="mb-2 font-bold">발송 기록</h3>
-              {logs.data!.map((m, i) => (
-                <div key={i} className="mb-2 rounded-xl bg-white p-3 text-sm">
-                  <div className="flex justify-between gap-2">
-                    <span>{m.ts} · {m.kind}</span>
-                    <Badge tone={m.result === "성공" ? "green" : m.result === "실패" ? "red" : "gray"}>{m.result}</Badge>
-                  </div>
-                  {m.error && <div className="mt-1 text-red-700">{m.error}</div>}
-                </div>
-              ))}
+              <MessageLogList items={logs.data!} compact />
             </div>
           )}
         </div>
