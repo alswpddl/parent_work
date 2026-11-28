@@ -38,8 +38,15 @@ from ...schemas.order import OrderCreate, OrderItemIn, OrderOut
 from ...schemas.settings import WEEKDAYS_KO, AppSettings, closed_weekdays
 from ..q2_self_order.service import PublicOrderOut, lead_for, to_public
 from .accounts import check_password, hash_password, issue_token, read_token, token_matches
+from .extras import ShopExtrasMixin
 
 MOBILE_RE = re.compile(r"^01[016789]\d{7,8}$")
+
+
+def _http_of(ctx: Any) -> Any:
+    from ...integrations.http import http_request
+
+    return getattr(ctx, "http", None) or http_request
 
 
 def digits(s: str) -> str:
@@ -80,6 +87,9 @@ class ShopProduct(BaseModel):
     sold_out: bool = False
     image_url: str = ""
     lead_days: int = 1  # 주문 후 며칠 뒤부터 받을 수 있나
+    detail: str = ""  # 상세 설명 (줄바꿈 그대로)
+    review_avg: float | None = None  # 같은 상품(이름) 후기 평균 별점
+    review_count: int = 0
 
 
 class ShopInfo(BaseModel):
@@ -100,6 +110,7 @@ class ShopInfo(BaseModel):
     products: list[ShopProduct]
     pay_client_key: str = ""  # 토스페이먼츠 클라이언트 키 (비면 온라인 결제 없음 — 계좌 입금만)
     pay_test_mode: bool = False  # 테스트 키면 True → 화면에 '테스트 결제' 표시
+    kakao_login: bool = False  # 카카오로 시작하기 버튼 보이기
 
 
 class GuestOrderIn(BaseModel):
@@ -115,8 +126,11 @@ class GuestOrderIn(BaseModel):
     website: str = Field(default="", max_length=200, description="숨김 칸 — 사람은 비워 둔다")
     client_token: str = Field(default="", max_length=64, description="같은 주문서의 중복 제출 막기")
     password: str = Field(default="", max_length=40, description="적으면 다음부터 로그인해서 주문 (가입)")
+    receipt_type: str = Field(default="", max_length=10, description="'' / 현금영수증 / 세금계산서")
+    receipt_id: str = Field(default="", max_length=20, description="현금영수증: 휴대폰 번호 / 세금계산서: 사업자번호")
+    receipt_email: str = Field(default="", max_length=80, description="세금계산서 받을 이메일")
 
-    @field_validator("name", "company", "address", "zipcode", "note", "client_token", mode="before")
+    @field_validator("name", "company", "address", "zipcode", "note", "client_token", "receipt_type", "receipt_id", "receipt_email", mode="before")
     @classmethod
     def _strip(cls, v):
         return (v or "").strip()
@@ -196,7 +210,7 @@ class ProfilePatch(BaseModel):
 
 
 class PasswordIn(BaseModel):
-    old_password: str = Field(min_length=1, max_length=40)
+    old_password: str = Field(default="", max_length=40)  # 카카오로만 가입한 손님은 비워도 됨
     new_password: str = Field(min_length=4, max_length=40)
 
 
@@ -223,6 +237,11 @@ class MyOrderOut(BaseModel):
     carrier: str
     tracking_no: str
     truck_no: str
+    recipient_phone: str = ""
+    zipcode: str = ""
+    can_cancel: bool = False  # 손님이 직접 취소 가능 (포장 전)
+    cancel_note: str = ""  # 취소 못 하는 이유 (전화 안내)
+    reviewable: list[str] = []  # 후기 쓸 수 있는 품목코드 (출고 완료 + 아직 안 씀)
 
 
 def _profile(c: CustomerOut) -> ProfileOut:
@@ -281,7 +300,7 @@ def shipping_for(st: AppSettings, subtotal: int | None, method: str) -> tuple[in
     return None, "택배비는 확인 후 안내드려요."
 
 
-class WebOrderService:
+class WebOrderService(ShopExtrasMixin):
     TOKEN_TTL = 3600
 
     def __init__(self, ctx: Any):
@@ -306,6 +325,10 @@ class WebOrderService:
         if not st.shop_enabled:
             raise NotFoundError(f"지금은 웹 주문을 받지 않아요. {st.factory_phone or ''}로 연락 주세요.".strip())
         closed = sorted(closed_weekdays(st.closed_days))
+        try:
+            reviews = self.review_summary()
+        except Exception:  # 후기 탭이 아직 없을 때(서버 재시작 전)도 주문서는 열려야 한다
+            reviews = {}
         return ShopInfo(
             factory_name=st.factory_name or "주문서",
             factory_phone=st.factory_phone,
@@ -316,6 +339,7 @@ class WebOrderService:
             bank_account=st.bank_account,
             pay_client_key=self.ctx.config.toss_client_key if self.ctx.config.toss_enabled else "",
             pay_test_mode=self.ctx.config.toss_enabled and self.ctx.config.toss_test_mode,
+            kakao_login=self.kakao_login_enabled,
             min_due_date=self._min_due(st),
             closed_weekdays=closed,
             closed_days_text=", ".join(WEEKDAYS_KO[i] for i in closed),
@@ -329,7 +353,8 @@ class WebOrderService:
                 ShopProduct(
                     sku=p.sku, name=p.name, spec=p.spec, unit=p.unit, unit_kg=p.unit_kg,
                     price=p.shop_price if st.shop_show_prices else None, description=p.description,
-                    sold_out=p.sold_out, image_url=p.image_url, lead_days=lead_for(st, [p]),
+                    sold_out=p.sold_out, image_url=p.image_url, lead_days=lead_for(st, [p]), detail=p.detail,
+                    review_avg=reviews.get(p.name, (None, 0))[0], review_count=reviews.get(p.name, (None, 0))[1],
                 )
                 for p in sorted(self._visible_products(), key=lambda p: (p.sold_out, p.name, p.unit_kg))
             ],
@@ -396,6 +421,15 @@ class WebOrderService:
                 raise ValidationFailed("주문할 수 없는 품목이 들어 있어요. 새로고침 후 다시 골라 주세요.")
             if p.sold_out:
                 raise ValidationFailed(f"{p.display_name}은(는) 지금 품절이에요. 빼고 주문해 주세요.")
+        if body.receipt_type not in ("", "현금영수증", "세금계산서"):
+            raise ValidationFailed("영수증 종류를 다시 골라 주세요.")
+        if body.receipt_type == "현금영수증" and len(digits(body.receipt_id)) not in (10, 11):
+            raise ValidationFailed("현금영수증 받을 휴대폰 번호(또는 사업자번호 10자리)를 넣어 주세요.")
+        if body.receipt_type == "세금계산서":
+            if len(digits(body.receipt_id)) != 10:
+                raise ValidationFailed("세금계산서 받을 사업자등록번호 10자리를 넣어 주세요.")
+            if "@" not in body.receipt_email:
+                raise ValidationFailed("세금계산서 받을 이메일을 넣어 주세요.")
         if body.due_date:
             min_due = self._min_due(st, [visible[i.sku] for i in body.items])
             if body.due_date < min_due:
@@ -404,6 +438,17 @@ class WebOrderService:
                 raise ValidationFailed("받는 날은 3개월 안으로 골라 주세요.")
             if body.due_date.weekday() in closed_weekdays(st.closed_days):
                 raise ValidationFailed(f"{WEEKDAYS_KO[body.due_date.weekday()]}요일은 택배가 쉬어요. 다른 날을 골라 주세요.")
+
+    @staticmethod
+    def _note_with_receipt(body: GuestOrderIn) -> str:
+        """현금영수증·세금계산서 요청은 특이사항 앞에 붙여 부모님이 바로 보게 한다"""
+        if body.receipt_type == "현금영수증":
+            tag = f"[현금영수증 {body.receipt_id}]"
+        elif body.receipt_type == "세금계산서":
+            tag = f"[세금계산서 {body.receipt_id} {body.receipt_email}]"
+        else:
+            return body.note
+        return f"{tag} {body.note}".strip()[:500]
 
     def _cached(self, token: str) -> GuestOrderOut | None:
         if not token:
@@ -458,7 +503,7 @@ class WebOrderService:
                     address=body.address,
                     zipcode=body.zipcode,
                     due_date=body.due_date,
-                    note=body.note,
+                    note=self._note_with_receipt(body),
                     items=body.items,
                     source="웹주문서",
                     shipping_fee=fee or 0,
@@ -534,6 +579,8 @@ class WebOrderService:
             raise ValidationFailed("휴대폰 번호를 확인해 주세요 (예: 010-1234-5678).")
         phone = pretty_phone(body.phone)
         rows = self._rows_by_phone(phone)
+        if any(str(r.get("web_password") or "").startswith("kakao:") for r in rows):
+            raise ValidationFailed("카카오로 가입한 번호예요. [카카오로 시작하기]로 로그인해 주세요.")
         if any(r.get("web_password") for r in rows):
             raise ValidationFailed("이미 가입된 번호예요. 로그인해 주세요. 비밀번호를 잊었으면 전화 주세요.")
         # 이름 비교·새 거래처 만들기에 쓰는 임시 값 (검사 없이 만든다)
@@ -607,7 +654,8 @@ class WebOrderService:
     def change_password(self, token: str, body: PasswordIn) -> AuthOut:
         c = self.member(token)
         row = self.ctx.customers.get(c.customer_id, fresh=True) or {}
-        if not check_password(body.old_password, row.get("web_password") or ""):
+        kakao_only = str(row.get("web_password") or "").startswith("kakao:")
+        if not kakao_only and not check_password(body.old_password, row.get("web_password") or ""):
             raise ValidationFailed("지금 비밀번호가 맞지 않아요.")
         h = hash_password(body.new_password)
         self.ctx.customers.update((c.customer_id,), {"web_password": h})
@@ -617,8 +665,13 @@ class WebOrderService:
         c = self.member(token)
         orders = self.ctx.orders.query(customer_id=c.customer_id, include_cancelled=True)
         orders.sort(key=lambda o: o.created_at.isoformat() if o.created_at else "", reverse=True)
+        try:
+            done = self.reviewed_keys(customer_id=c.customer_id)
+        except Exception:
+            done = set()
         out = []
         for o in orders[:50]:
+            why = self.cancel_block_reason(o)
             out.append(MyOrderOut(
                 order_id=o.order_id,
                 created_at=o.created_at.strftime("%Y.%m.%d %H:%M") if o.created_at else "",
@@ -632,6 +685,9 @@ class WebOrderService:
                 paid=o.paid_at is not None,
                 recipient=o.recipient, address=o.address,
                 carrier=o.carrier, tracking_no=o.tracking_no, truck_no=o.truck_no,
+                recipient_phone=o.phone, zipcode=o.zipcode,
+                can_cancel=not why, cancel_note=why if o.status == "접수" else "",
+                reviewable=[l.sku for l in o.lines if o.status == "출고완료" and (o.order_id, l.sku) not in done],
             ))
         return out
 
@@ -655,9 +711,7 @@ class WebOrderService:
     # ---------------------------------------------------------------- 온라인 결제 (토스페이먼츠)
     @property
     def _http(self) -> Any:
-        from ...integrations.http import http_request
-
-        return getattr(self.ctx, "http", None) or http_request
+        return _http_of(self.ctx)
 
     def _pay_token(self, order_id: str) -> str:
         return sign(self._secret, f"pay:{order_id}", 3 * 24 * 3600)

@@ -120,7 +120,8 @@ CUSTOMERS = TabSpec(
         C("default_method", "기본출고방식"),
         C("order_token", "주문링크토큰", quarter=2),
         C("privacy_agreed_at", "개인정보동의", "datetime", quarter=2),
-        C("web_password", "웹로그인(암호화)", quarter=2),  # 손님이 정한 비밀번호의 해시. 지우면 비밀번호 초기화
+        C("web_password", "웹로그인(암호화)", quarter=2),
+        C("kakao_id", "카카오ID", text=True, quarter=2),  # 카카오 로그인으로 연결된 손님 (지우면 연결 끊김)  # 손님이 정한 비밀번호의 해시. 지우면 비밀번호 초기화
         C("notify_opt_in", "알림톡수신", "bool", quarter=3),
         C("biz_no", "사업자번호", text=True, quarter=4),
         C("owner_name", "대표자", quarter=4),
@@ -155,6 +156,7 @@ PRODUCTS = TabSpec(
         C("sold_out", "품절", "bool", quarter=2),
         C("lead_days", "준비일", "int", quarter=2),  # 주문 후 며칠 뒤부터 받을 수 있나 (비우면 _설정 기본값)
         C("image_url", "사진주소", quarter=2),
+        C("detail", "상세설명", quarter=2),  # 상품 화면에 보이는 긴 설명 (줄바꿈 그대로)
         C("tax_type", "과세구분", quarter=4),
         C("container_item", "용기자재", quarter=4),
         C("box_item", "박스자재", quarter=4),
@@ -271,6 +273,25 @@ STOCK_MOVES = TabSpec(
     ),
 )
 
+# 구매 후기 (2분기) — 출고된 주문의 품목만. 부모님이 '숨김'을 예로 하면 안 보임
+REVIEWS = TabSpec(
+    name="reviews",
+    title="후기",
+    key_fields=("review_id",),
+    columns=(
+        C("review_id", "후기ID", quarter=2),
+        C("created_at", "작성일시", "datetime", quarter=2),
+        C("product_name", "상품", quarter=2),
+        C("sku", "품목코드", quarter=2),
+        C("order_id", "주문번호", quarter=2),
+        C("customer_id", "거래처ID", quarter=2),
+        C("author", "작성자", quarter=2),  # 가운데 글자 가림 (최*제)
+        C("rating", "별점", "int", quarter=2),
+        C("text", "내용", quarter=2),
+        C("hidden", "숨김", "bool", quarter=2),
+    ),
+)
+
 # 숙성 저장소 (4분기) — 건물마다 저장소 8~10개. 담근 날 + 숙성 기간 = 출하 가능일
 TANKS = TabSpec(
     name="tanks",
@@ -292,7 +313,7 @@ TANKS = TabSpec(
 )
 
 ALL_TABS: tuple[TabSpec, ...] = (
-    ORDERS, CUSTOMERS, PRODUCTS, INVENTORY, SETTLEMENTS, SETTINGS, LOGS, MARKET_MAP, STOCK_MOVES, TANKS,
+    ORDERS, CUSTOMERS, PRODUCTS, INVENTORY, SETTLEMENTS, SETTINGS, LOGS, MARKET_MAP, STOCK_MOVES, TANKS, REVIEWS,
 )
 
 # ---------------------------------------------------------------------------

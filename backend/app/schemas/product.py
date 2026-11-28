@@ -23,6 +23,7 @@ class ProductBase(BaseModel):
     sold_out: bool = False
     lead_days: int | None = Field(default=None, ge=0, le=60)
     image_url: str = Field(default="", max_length=500)
+    detail: str = Field(default="", max_length=3000)
     # 4분기: 세금·자재 매핑
     tax_type: TaxType = ""
     container_item: str = ""
@@ -32,7 +33,7 @@ class ProductBase(BaseModel):
     bulk_item: str = ""
     net_kg: float | None = Field(default=None, gt=0, le=2000)
 
-    @field_validator("name", "spec", "aliases", "unit", "description", "container_item", "box_item", "label_item", "lid_item", "bulk_item", "image_url", mode="before")
+    @field_validator("name", "spec", "aliases", "unit", "description", "container_item", "box_item", "label_item", "lid_item", "bulk_item", "image_url", "detail", mode="before")
     @classmethod
     def _strip(cls, v):
         return (v or "").strip()
@@ -57,6 +58,7 @@ class ProductPatch(BaseModel):
     sold_out: bool | None = None
     lead_days: int | None = Field(default=None, ge=0, le=60)
     image_url: str | None = Field(default=None, max_length=500)
+    detail: str | None = Field(default=None, max_length=3000)
     tax_type: TaxType | None = None
     container_item: str | None = None
     box_item: str | None = None
@@ -113,6 +115,7 @@ class ProductOut(ProductBase):
             retail_price=d.get("retail_price") if (d.get("retail_price") or 0) > 0 else None,
             sold_out=d.get("sold_out") is True,
             image_url=d.get("image_url") or "",
+            detail=d.get("detail") or "",
             lead_days=_lead(d.get("lead_days")),
             tax_type=tax if tax in ("과세", "면세") else "",  # type: ignore[arg-type]
             container_item=d.get("container_item") or "",

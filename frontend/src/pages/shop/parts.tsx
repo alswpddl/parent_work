@@ -1,6 +1,9 @@
 // 웹 주문서 화면 조각들
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Search } from "lucide-react";
+import { Search, Share2 } from "lucide-react";
+import { errorMessage } from "../../api/client";
+import { shopReviews } from "../../api/endpoints";
+import type { ShopReviewList } from "../../api/types";
 import { Button, CopyButton, Field, Input, Modal, cx } from "../../components/ui";
 import { formatAddress, loadPostcode } from "../../lib/postcode";
 
@@ -191,3 +194,103 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
     </div>
   );
 }
+
+// ---------------------------------------------------------------- 별점·후기·공유
+/** 별 다섯 개 (꽉 찬 별 = 점수). 읽는 사람에겐 "별점 4.5점" */
+export function Stars({ value, size = "text-base" }: { value: number; size?: string }) {
+  const full = Math.round(value);
+  return (
+    <span className={cx("whitespace-nowrap tracking-tight text-amber-500", size)} aria-label={`별점 ${value}점`}>
+      {"★★★★★".slice(0, full)}
+      <span className="text-stone-300">{"★★★★★".slice(full)}</span>
+    </span>
+  );
+}
+
+export function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex gap-1" role="radiogroup" aria-label="별점">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          role="radio"
+          aria-checked={value === n}
+          aria-label={`${n}점`}
+          onClick={() => onChange(n)}
+          className={cx("text-4xl leading-none", n <= value ? "text-amber-500" : "text-stone-300")}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function ReviewsSection({ name }: { name: string }) {
+  const [data, setData] = useState<ShopReviewList | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    shopReviews(name)
+      .then(setData)
+      .catch((e) => setError(errorMessage(e)));
+  }, [name]);
+  if (error) return null;
+  if (!data) return null;
+  return (
+    <section className="mt-8">
+      <div className="mb-3 flex items-baseline gap-2 border-b border-line pb-2">
+        <h2 className="text-xl font-extrabold text-brand-dark">구매 후기</h2>
+        {data.average !== null && (
+          <span className="flex items-baseline gap-1.5">
+            <Stars value={data.average} />
+            <b>{data.average.toFixed(1)}</b>
+            <span className="text-sm text-stone-500">({data.count})</span>
+          </span>
+        )}
+      </div>
+      {data.items.length === 0 ? (
+        <p className="break-keep text-stone-500">아직 후기가 없어요. 받아 보신 분은 마이페이지 주문 내역에서 후기를 남길 수 있어요.</p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {data.items.map((r) => (
+            <li key={r.review_id} className="py-3">
+              <div className="flex flex-wrap items-center gap-x-2 text-sm text-stone-500">
+                <Stars value={r.rating} size="text-sm" />
+                <span className="font-semibold text-stone-700">{r.author}</span>
+                {r.spec && <span>{r.spec}</span>}
+                <span>{r.created_at}</span>
+              </div>
+              {r.text && <p className="mt-1 break-keep">{r.text}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** 휴대폰이면 공유 창(카카오톡 등), 컴퓨터면 주소 복사 */
+export function ShareButton({ title, text }: { title: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* 공유 창을 닫은 경우 */
+    }
+  };
+  return (
+    <Button size="sm" variant="ghost" icon={<Share2 className="h-4 w-4" />} onClick={share}>
+      {copied ? "주소 복사됨" : "공유하기"}
+    </Button>
+  );
+}
+
