@@ -18,6 +18,7 @@ export interface Features {
   env: string;
   integrations: { ai: boolean; kakao: boolean; solapi: boolean; email: boolean; toss?: boolean; toss_test?: boolean };
   public_web_url: string;
+  public_shop_url?: string; // 손님 주문서 주소 (따로 있으면 /shop 없이)
 }
 
 export interface SystemStatus {

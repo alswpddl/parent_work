@@ -104,7 +104,7 @@ class KakaoBot:
 
     # ---------------------------------------------------------------- 공용
     def _shop_url(self, path: str = "") -> str:
-        return f"{self.ctx.config.public_web_url.rstrip('/')}/shop{path}"
+        return self.ctx.config.shop_link(path)
 
     def _phone_btn(self, st) -> list[dict]:
         return [{"label": "전화하기", "action": "phone", "phoneNumber": st.factory_phone}] if st.factory_phone else []

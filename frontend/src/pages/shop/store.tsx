@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { shopInfo, shopMe } from "../../api/endpoints";
 import type { GuestOrderResult, ShopAuth, ShopInfo, ShopProduct, ShopProfile } from "../../api/types";
 import { useAsync } from "../../lib/hooks";
+import { SP } from "../../lib/host";
 
 export const store = {
   get<T>(k: string, fallback: T): T {
@@ -178,7 +179,7 @@ export function groupProducts(products: ShopProduct[]): ProductGroup[] {
   });
 }
 
-export const itemPath = (name: string) => `/shop/item/${encodeURIComponent(name)}`;
+export const itemPath = (name: string) => `${SP}/item/${encodeURIComponent(name)}`;
 
 // ---------------------------------------------------------------- 공용 계산
 export const MOBILE_RE = /^01[016789]\d{7,8}$/;

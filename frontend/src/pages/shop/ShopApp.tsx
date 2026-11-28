@@ -20,6 +20,7 @@ import My from "./My";
 import { Pay, PayFail, PaySuccess } from "./Pay";
 import { BackToTop, LabelTable, PayGuide, PayStatus, Price, ProductArt, ReviewsSection, Row, STATUS, ShareButton, ShopSkeleton, Stars, StatusSteps, arriveText, perKg, trackUrl } from "./parts";
 import { LAST_KEY, ShopProvider, digits, groupProducts, itemPath, store, useShop, type ProductGroup } from "./store";
+import { SHOP_HOME, SP, isShopHost } from "../../lib/host";
 
 export default function ShopApp() {
   return (
@@ -41,7 +42,9 @@ type Page =
   | { name: "pay-fail" };
 
 function route(pathname: string, search: string): Page {
-  const p = pathname.replace(/\/+$/, "");
+  // 손님 주소(gayeom.vercel.app)에서는 /shop 없이 들어와요 → 안에서는 같은 이름으로 맞춰서 읽어요
+  let p = pathname.replace(/\/+$/, "");
+  if (isShopHost() && p !== "/shop" && !p.startsWith("/shop/")) p = `/shop${p}`;
   const m = /^\/shop\/item\/(.+)$/.exec(p);
   if (m) return { name: "item", item: decodeURIComponent(m[1]) };
   if (p === "/shop/pay/success") return { name: "pay-success" };
@@ -88,9 +91,9 @@ function Shell() {
   // 상품·장바구니·결제는 앱처럼 '← 제목' 머리, 나머지는 가게 이름 머리
   const subTitle =
     page.name === "item" ? page.item : page.name === "cart" ? "장바구니" : page.name === "pay" || page.name === "pay-success" || page.name === "pay-fail" ? "결제" : "";
-  const back = () => (window.history.length > 1 ? window.history.back() : nav("/shop"));
+  const back = () => (window.history.length > 1 ? window.history.back() : nav(SHOP_HOME));
   const cartIcon = (
-    <Link to="/shop/cart" className="relative flex h-10 w-10 items-center justify-center rounded hover:bg-white/10" aria-label={`장바구니 ${s.cartCount}개`}>
+    <Link to={`${SP}/cart`} className="relative flex h-10 w-10 items-center justify-center rounded hover:bg-white/10" aria-label={`장바구니 ${s.cartCount}개`}>
       <ShoppingBasket className="h-6 w-6" />
       {s.cartCount > 0 && (
         <span key={bump} className={cx("absolute -right-0.5 -top-0.5 min-w-[1.25rem] rounded-full bg-brine px-1 text-center text-xs font-bold leading-5 text-white", bump > 0 && "badge-bump")}>
@@ -112,7 +115,7 @@ function Shell() {
               </button>
               <span className="min-w-0 flex-1 truncate text-center text-lg font-bold">{subTitle}</span>
               {page.name === "cart" ? (
-                <Link to="/shop" aria-label="홈" className="flex h-10 w-10 shrink-0 items-center justify-center rounded hover:bg-white/10">
+                <Link to={SHOP_HOME} aria-label="홈" className="flex h-10 w-10 shrink-0 items-center justify-center rounded hover:bg-white/10">
                   <HomeIcon className="h-6 w-6" />
                 </Link>
               ) : (
@@ -121,11 +124,11 @@ function Shell() {
             </>
           ) : (
             <>
-              <Link to="/shop" className="min-w-0 truncate px-2 font-serif text-xl font-bold">
+              <Link to={SHOP_HOME} className="min-w-0 truncate px-2 font-serif text-xl font-bold">
                 {s.info.factory_name}
               </Link>
               <div className="flex items-center gap-1">
-                <Link to="/shop/my" className="flex h-10 items-center gap-1 rounded px-3 text-sm font-bold text-white/90 hover:bg-white/10" aria-label="마이페이지">
+                <Link to={`${SP}/my`} className="flex h-10 items-center gap-1 rounded px-3 text-sm font-bold text-white/90 hover:bg-white/10" aria-label="마이페이지">
                   <User className="h-5 w-5" />
                   {s.auth ? <span className="max-w-[5rem] truncate">{s.auth.profile.name}님</span> : "로그인"}
                 </Link>
@@ -170,18 +173,18 @@ function TabBar({ active }: { active: Page["name"] }) {
   return (
     <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-lg">
-        {tab("/shop", active === "home", <HomeIcon className="h-6 w-6" />, "홈")}
-        {tab("/shop/cart", false, <ShoppingBasket className="h-6 w-6" />, "장바구니", s.cartCount)}
+        {tab(SHOP_HOME, active === "home", <HomeIcon className="h-6 w-6" />, "홈")}
+        {tab(`${SP}/cart`, false, <ShoppingBasket className="h-6 w-6" />, "장바구니", s.cartCount)}
         {s.auth
-          ? tab("/shop/my", active === "my", <User className="h-6 w-6" />, "주문 내역")
-          : tab("/shop/lookup", active === "lookup", <Search className="h-6 w-6" />, "주문 조회")}
+          ? tab(`${SP}/my`, active === "my", <User className="h-6 w-6" />, "주문 내역")
+          : tab(`${SP}/lookup`, active === "lookup", <Search className="h-6 w-6" />, "주문 조회")}
         {s.info?.factory_phone ? (
           <a href={telHref(s.info.factory_phone)} className="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-bold text-stone-500">
             <Phone className="h-6 w-6" />
             전화 주문
           </a>
         ) : (
-          tab("/shop/my", active === "my", <User className="h-6 w-6" />, "로그인")
+          tab(`${SP}/my`, active === "my", <User className="h-6 w-6" />, "로그인")
         )}
       </div>
     </nav>
@@ -261,7 +264,7 @@ function Home() {
         {!s.auth && (
           <p className="break-keep border-t border-line px-4 py-3 text-sm text-stone-600">
             가입하면 주소를 다시 적지 않아도 되고, 지난 주문을 그대로 다시 할 수 있어요.{" "}
-            <Link to="/shop/my" className="font-bold text-brand underline underline-offset-2">가입하기</Link>
+            <Link to={`${SP}/my`} className="font-bold text-brand underline underline-offset-2">가입하기</Link>
           </p>
         )}
       </details>
@@ -347,7 +350,7 @@ function LastOrder() {
   const again = () => {
     const n = s.addMany(o.lines.map((l) => ({ sku: l.sku, qty: l.qty })));
     if (!n) return toast("지금은 주문할 수 없는 품목이에요 (품절이거나 판매 중지).", "error");
-    toast(n < o.lines.length ? `${n}가지를 담았어요. 품절된 품목은 뺐어요.` : "지난 주문을 장바구니에 담았어요.", "ok", { label: "장바구니 보기", onClick: () => nav("/shop/cart") });
+    toast(n < o.lines.length ? `${n}가지를 담았어요. 품절된 품목은 뺐어요.` : "지난 주문을 장바구니에 담았어요.", "ok", { label: "장바구니 보기", onClick: () => nav(`${SP}/cart`) });
   };
   return (
     <section className="mb-4 rounded-lg border border-line bg-white px-4 py-3">
@@ -428,7 +431,7 @@ function Item({ name }: { name: string }) {
     return (
       <div className="py-10 text-center">
         <p className="mb-4 text-stone-600">상품을 찾지 못했어요.</p>
-        <Link to="/shop"><Button>홈으로</Button></Link>
+        <Link to={SHOP_HOME}><Button>홈으로</Button></Link>
       </div>
     );
 
@@ -600,11 +603,11 @@ function Item({ name }: { name: string }) {
               <Button
                 size="xl"
                 variant="ghost"
-                onClick={() => add() && toast("장바구니에 담았어요.", "ok", { label: "장바구니 보기", onClick: () => nav("/shop/cart") })}
+                onClick={() => add() && toast("장바구니에 담았어요.", "ok", { label: "장바구니 보기", onClick: () => nav(`${SP}/cart`) })}
               >
                 장바구니
               </Button>
-              <Button size="xl" onClick={() => add() && nav("/shop/cart")}>
+              <Button size="xl" onClick={() => add() && nav(`${SP}/cart`)}>
                 바로 구매
               </Button>
             </div>
@@ -636,7 +639,7 @@ function Done() {
   if (!r)
     return (
       <div className="py-10 text-center">
-        <Link to="/shop"><Button>홈으로</Button></Link>
+        <Link to={SHOP_HOME}><Button>홈으로</Button></Link>
       </div>
     );
   return (
@@ -667,7 +670,7 @@ function Done() {
 
       {s.info?.pay_client_key && r.estimated_total !== null && r.pay_token && (
         <div className="mb-3">
-          <Link to={`/shop/pay/${encodeURIComponent(r.order_id)}?t=${encodeURIComponent(r.pay_token)}`}>
+          <Link to={`${SP}/pay/${encodeURIComponent(r.order_id)}?t=${encodeURIComponent(r.pay_token)}`}>
             <Button size="xl" block icon={<CreditCard className="h-6 w-6" />}>
               카드·간편결제로 {won(r.estimated_total)} 결제하기
             </Button>
@@ -681,11 +684,11 @@ function Done() {
 
       <div className="grid grid-cols-2 gap-2">
         {s.auth ? (
-          <Link to="/shop/my"><Button block variant="ghost" icon={<Package className="h-5 w-5" />}>내 주문 보기</Button></Link>
+          <Link to={`${SP}/my`}><Button block variant="ghost" icon={<Package className="h-5 w-5" />}>내 주문 보기</Button></Link>
         ) : (
-          <Link to="/shop/lookup"><Button block variant="ghost" icon={<Package className="h-5 w-5" />}>주문 조회</Button></Link>
+          <Link to={`${SP}/lookup`}><Button block variant="ghost" icon={<Package className="h-5 w-5" />}>주문 조회</Button></Link>
         )}
-        <Link to="/shop"><Button block variant="soft">홈으로</Button></Link>
+        <Link to={SHOP_HOME}><Button block variant="soft">홈으로</Button></Link>
       </div>
       {r.factory_phone && (
         <a href={telHref(r.factory_phone)} className="mt-3 flex items-center justify-center gap-2 py-3 font-bold text-stone-600">
@@ -726,9 +729,9 @@ function Lookup() {
       <h1 className="mb-1 text-2xl font-extrabold">주문 조회</h1>
       <p className="mb-4 text-stone-600">
         {s.auth ? (
-          <>가입하셨으면 <Link to="/shop/my" className="font-bold text-brand underline">마이페이지</Link>에서 모든 주문을 볼 수 있어요.</>
+          <>가입하셨으면 <Link to={`${SP}/my`} className="font-bold text-brand underline">마이페이지</Link>에서 모든 주문을 볼 수 있어요.</>
         ) : (
-          <>비회원 주문은 주문번호로 찾아요. 가입하면 <Link to="/shop/my" className="font-bold text-brand underline">마이페이지</Link>에서 한 번에 볼 수 있어요.</>
+          <>비회원 주문은 주문번호로 찾아요. 가입하면 <Link to={`${SP}/my`} className="font-bold text-brand underline">마이페이지</Link>에서 한 번에 볼 수 있어요.</>
         )}
       </p>
       <Field label="주문번호" hint="주문 완료 화면에 나온 번호예요. 예) 20261126-K7Q3">
@@ -780,7 +783,7 @@ function Lookup() {
             </Button>
           )}
           {!r.paid && r.status !== "취소" && s.info?.pay_client_key && (
-            <Link to={`/shop/pay/${encodeURIComponent(r.order_id)}?p=${digits(phone4)}`} className="mt-3 block">
+            <Link to={`${SP}/pay/${encodeURIComponent(r.order_id)}?p=${digits(phone4)}`} className="mt-3 block">
               <Button block size="lg" icon={<CreditCard className="h-5 w-5" />}>카드·간편결제로 결제하기</Button>
             </Link>
           )}

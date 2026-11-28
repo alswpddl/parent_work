@@ -130,7 +130,7 @@ class SelfOrderService:
 
     # ---------------------------------------------------------------- 관리자
     def link_url(self, token: str) -> str:
-        return f"{self.ctx.config.public_web_url}/order/{token}"
+        return self.ctx.config.customer_link(f"/order/{token}")
 
     def issue_link(self, customer_id: str, regenerate: bool = False) -> LinkOut:
         row = self.ctx.customers.get(customer_id, fresh=True)

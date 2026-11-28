@@ -8,8 +8,9 @@
     <link rel="icon" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <script>
-      // 부모님용 관리 화면만 '앱 설치'·'공유하기'가 되게 (손님 주문서에는 안 붙임)
-      if (!/^\/(shop|o)(\/|$)/.test(location.pathname)) {
+      // 부모님용 관리 화면만 (손님 주소 gayeom.vercel.app 에는 안 붙임 — src/lib/host.ts 와 같이 고쳐요)
+      // '앱 설치'·'공유하기'가 되게 (손님 주문서에는 안 붙임)
+      if (location.hostname !== "gayeom.vercel.app" && !/^\/(shop|o)(\/|$)/.test(location.pathname)) {
         var m = document.createElement("link");
         m.rel = "manifest";
         m.href = "/manifest.webmanifest";

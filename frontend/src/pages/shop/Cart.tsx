@@ -9,6 +9,7 @@ import { Alert, Button, Field, Input, Modal, Segmented, Stepper, Textarea, cx } 
 import { dateKo, won } from "../../lib/format";
 import { AddressField, Price, ProductArt, Row, SectionTitle, joinAddress, type Address } from "./parts";
 import { LAST_KEY, MOBILE_RE, WEEK, digits, formatPhone, itemPath, minDueFor, newToken, store, useShop, weekdayOf } from "./store";
+import { SHOP_HOME, SP } from "../../lib/host";
 
 const ME_KEY = "shop.me"; // 비회원이 '기억하기'를 고르면 받는 분 정보 저장
 
@@ -165,7 +166,7 @@ export default function Cart() {
       s.setLastResult(r);
       s.clearCart();
       setConfirm(false);
-      nav("/shop/done");
+      nav(`${SP}/done`);
     } catch (e) {
       setSendError(errorMessage(e));
     } finally {
@@ -178,7 +179,7 @@ export default function Cart() {
       <div className="py-12 text-center">
         <ShoppingBasket className="mx-auto mb-3 h-16 w-16 text-stone-300" />
         <p className="mb-5 text-lg text-stone-600">장바구니가 비어 있어요.</p>
-        <Link to="/shop"><Button size="lg">상품 보러 가기</Button></Link>
+        <Link to={SHOP_HOME}><Button size="lg">상품 보러 가기</Button></Link>
       </div>
     );
 
@@ -209,7 +210,7 @@ export default function Cart() {
             </div>
           </div>
         ))}
-        <Link to="/shop" className="block py-2 text-center font-semibold text-brand">+ 다른 상품 더 담기</Link>
+        <Link to={SHOP_HOME} className="block py-2 text-center font-semibold text-brand">+ 다른 상품 더 담기</Link>
       </div>
 
       {subtotal !== null && (
@@ -227,7 +228,7 @@ export default function Cart() {
       <SectionTitle right={member && <span className="text-sm text-stone-500">내 정보로 채웠어요</span>}>받는 분</SectionTitle>
       {!member && (
         <p className="mb-3 rounded-xl bg-brand-soft px-3 py-2 text-sm text-brand-dark">
-          가입했다면 <Link to="/shop/my" className="font-bold underline">로그인</Link>하고 주문하면 주소가 자동으로 채워져요.
+          가입했다면 <Link to={`${SP}/my`} className="font-bold underline">로그인</Link>하고 주문하면 주소가 자동으로 채워져요.
         </p>
       )}
       <div id="f-name">

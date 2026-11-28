@@ -68,7 +68,8 @@ class AppConfig(BaseModel):
     app_env: Literal["dev", "prod", "test"] = "dev"
 
     # --- 공개 주소 (카카오 링크·리다이렉트·거래처 주문 링크에 사용) ---
-    public_web_url: str = "http://localhost:5173"  # 프론트(Vercel) 주소
+    public_web_url: str = "http://localhost:5173"  # 프론트(Vercel) 주소 — 관리자 화면
+    public_shop_url: str = ""  # 손님 주문서 전용 주소 (예: https://gayeom.vercel.app). 비우면 {public_web_url}/shop
     public_api_url: str = "http://localhost:8000"  # 백엔드(Render) 주소
     kakao_skill_key: str = ""  # 카카오톡 챗봇 스킬 주소에 붙는 비밀 키 (비우면 챗봇 꺼짐)
 
@@ -147,6 +148,16 @@ class AppConfig(BaseModel):
     def kakao_enabled(self) -> bool:
         return bool(self.kakao_rest_api_key)
 
+    def shop_link(self, path: str = "") -> str:
+        """손님 주문서 링크. path 는 '/my', '/cart', '/item/…' 처럼 /shop 뒤의 부분."""
+        if self.public_shop_url:
+            return f"{self.public_shop_url.rstrip('/')}{path}" or self.public_shop_url
+        return f"{self.public_web_url.rstrip('/')}/shop{path}"
+
+    def customer_link(self, path: str) -> str:
+        """손님이 받는 그 밖의 링크 (거래처 셀프주문 /order/… 등). 손님 주소가 있으면 그쪽으로."""
+        return f"{(self.public_shop_url or self.public_web_url).rstrip('/')}{path}"
+
     @property
     def kakao_callback_url(self) -> str:
         return self.kakao_redirect_uri or f"{self.public_api_url}/api/integrations/kakao/callback"
@@ -190,6 +201,7 @@ class AppConfig(BaseModel):
         return cls(
             app_env=g("APP_ENV", "dev"),  # type: ignore[arg-type]
             public_web_url=g("PUBLIC_WEB_URL", "http://localhost:5173"),
+            public_shop_url=g("PUBLIC_SHOP_URL", "").rstrip("/"),
             public_api_url=g("PUBLIC_API_URL", "http://localhost:8000"),
             sheets_backend=g("SHEETS_BACKEND", "memory"),  # type: ignore[arg-type]
             spreadsheet_id=sheet_id(g("GOOGLE_SPREADSHEET_ID", "")),
