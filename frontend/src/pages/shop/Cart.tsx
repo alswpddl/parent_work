@@ -1,11 +1,11 @@
 // 장바구니 · 주문하기
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronDown, ShoppingBasket, Trash2 } from "lucide-react";
 import { errorMessage } from "../../api/client";
-import { shopPlaceOrderAs } from "../../api/endpoints";
+import { shopMyOrders, shopPlaceOrderAs } from "../../api/endpoints";
 import type { ShopInfo, ShopProduct } from "../../api/types";
-import { Alert, Button, Field, Input, Modal, Stepper, Textarea, cx } from "../../components/ui";
+import { Alert, Button, Field, Input, Modal, Segmented, Stepper, Textarea, cx } from "../../components/ui";
 import { dateKo, won } from "../../lib/format";
 import { AddressField, ProductArt, Row, SectionTitle, joinAddress, type Address } from "./parts";
 import { LAST_KEY, MOBILE_RE, WEEK, digits, formatPhone, itemPath, minDueFor, newToken, store, useShop, weekdayOf } from "./store";
@@ -41,7 +41,7 @@ export default function Cart() {
     [s.cart, s.bySku],
   );
   const minDue = minDueFor(shop, picked.map((x) => x.p));
-  const slow = picked.filter((x) => x.p.lead_days > 1);
+  const slow = picked.filter((x) => (x.p.lead_days ?? 1) > 1);
   const count = picked.reduce((a, x) => a + x.qty, 0);
   const subtotal = shop.show_prices && picked.every((x) => x.p.price !== null) ? picked.reduce((a, x) => a + x.qty * (x.p.price ?? 0), 0) : null;
   const ship = estimateShipping(shop, subtotal, picked.reduce((a, x) => a + x.qty * x.p.unit_kg, 0));
@@ -59,10 +59,30 @@ export default function Cart() {
   const [password, setPassword] = useState("");
   const [due, setDue] = useState("");
   const [note, setNote] = useState("");
+  const [receipt, setReceipt] = useState<{ type: "" | "현금영수증" | "세금계산서"; id: string; email: string }>({ type: "", id: "", email: "" });
+  // 로그인 손님: 지난 주문의 배송지를 골라 쓸 수 있게 (선물·가게·집)
+  const [recent, setRecent] = useState<{ name: string; phone: string; address: string; zipcode: string }[]>([]);
+  useEffect(() => {
+    if (!member) return;
+    shopMyOrders(member.token)
+      .then((list) => {
+        const seen = new Set<string>();
+        const out: { name: string; phone: string; address: string; zipcode: string }[] = [];
+        for (const o of list) {
+          const key = `${o.recipient}|${o.address}`;
+          if (o.status === "취소" || !o.address || seen.has(key)) continue;
+          seen.add(key);
+          out.push({ name: o.recipient, phone: o.recipient_phone, address: o.address, zipcode: o.zipcode });
+          if (out.length >= 4) break;
+        }
+        setRecent(out);
+      })
+      .catch(() => undefined);
+  }, [member]);
   const [agree, setAgree] = useState(!!member);
   const [showPolicy, setShowPolicy] = useState(false);
   const [website, setWebsite] = useState(""); // 숨김 칸 (봇용)
-  const [errors, setErrors] = useState<Partial<Record<"items" | "name" | "phone" | "address" | "due" | "password" | "agree", string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<"items" | "name" | "phone" | "address" | "due" | "password" | "agree" | "receipt", string>>>({});
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -81,8 +101,11 @@ export default function Cart() {
     else if (dueClosed) e.due = `${WEEK[weekdayOf(due)]}요일은 택배가 쉬어요. 다른 날을 골라 주세요.`;
     if (!member && password && password.length < 4) e.password = "비밀번호는 4자리 이상으로 만들어 주세요.";
     if (!agree) e.agree = "개인정보 수집·이용에 동의해 주세요.";
+    if (receipt.type === "현금영수증" && ![10, 11].includes(digits(receipt.id).length)) e.receipt = "현금영수증 받을 휴대폰 번호를 넣어 주세요.";
+    if (receipt.type === "세금계산서" && (digits(receipt.id).length !== 10 || !receipt.email.includes("@")))
+      e.receipt = "사업자등록번호 10자리와 이메일을 넣어 주세요.";
     setErrors(e);
-    const first = (["items", "name", "phone", "address", "due", "password", "agree"] as const).find((k) => e[k]);
+    const first = (["items", "name", "phone", "address", "due", "receipt", "password", "agree"] as const).find((k) => e[k]);
     if (first) document.getElementById(`f-${first}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     return !first;
   };
@@ -105,6 +128,9 @@ export default function Cart() {
           website,
           client_token: tokenRef.current,
           password: member ? "" : password,
+          receipt_type: receipt.type,
+          receipt_id: receipt.id.trim(),
+          receipt_email: receipt.email.trim(),
         },
         member?.token ?? "",
       );
@@ -193,6 +219,26 @@ export default function Cart() {
           <Input value={who.phone} type="tel" inputMode="numeric" autoComplete="tel" placeholder="010-1234-5678" onChange={(e) => set({ phone: formatPhone(e.target.value) })} />
         </Field>
       </div>
+      {recent.length > 1 && (
+        <div className="mb-3">
+          <div className="mb-1.5 text-sm font-bold text-stone-700">최근 배송지</div>
+          <div className="flex flex-wrap gap-2">
+            {recent.map((r) => {
+              const on = joinAddress(who.address) === r.address && who.name === r.name;
+              return (
+                <button
+                  key={`${r.name}|${r.address}`}
+                  type="button"
+                  onClick={() => set({ name: r.name, phone: r.phone || who.phone, address: { base: r.address, detail: "", zipcode: r.zipcode } })}
+                  className={cx("max-w-full rounded-lg border px-3 py-2 text-left text-sm", on ? "border-brand bg-brand-soft" : "border-line bg-white")}
+                >
+                  <b>{r.name}</b> <span className="text-stone-500">{r.address.length > 22 ? `${r.address.slice(0, 22)}…` : r.address}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div id="f-address">
         <AddressField value={who.address} onChange={(a) => set({ address: a })} error={errors.address} />
       </div>
@@ -215,6 +261,34 @@ export default function Cart() {
       <Field label="요청사항">
         <Textarea rows={2} className="min-h-[84px]" value={note} maxLength={300} placeholder="예) 문 앞에 두세요 / 오전에 받고 싶어요" onChange={(e) => setNote(e.target.value)} />
       </Field>
+      <div className="mb-3" role="group" aria-labelledby="receipt-label">
+        <div id="f-receipt" className="scroll-mt-20" />
+        <span id="receipt-label" className="mb-1.5 block text-sm font-bold text-stone-700">영수증</span>
+        <Segmented
+          value={receipt.type}
+          onChange={(t) => setReceipt({ ...receipt, type: t })}
+          options={[
+            { value: "", label: "안 받음" },
+            { value: "현금영수증", label: "현금영수증" },
+            { value: "세금계산서", label: "세금계산서" },
+          ]}
+        />
+      </div>
+      {receipt.type === "현금영수증" && (
+        <Field label="현금영수증 받을 번호" hint={errors.receipt ? <span className="text-red-700">{errors.receipt}</span> : "휴대폰 번호 (사업자면 사업자번호 10자리)"}>
+          <Input inputMode="numeric" value={receipt.id} placeholder="010-1234-5678" onChange={(e) => setReceipt({ ...receipt, id: e.target.value })} />
+        </Field>
+      )}
+      {receipt.type === "세금계산서" && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="사업자등록번호" hint={errors.receipt && <span className="text-red-700">{errors.receipt}</span>}>
+            <Input inputMode="numeric" value={receipt.id} placeholder="123-45-67890" onChange={(e) => setReceipt({ ...receipt, id: e.target.value })} />
+          </Field>
+          <Field label="받을 이메일">
+            <Input type="email" value={receipt.email} placeholder="shop@example.com" onChange={(e) => setReceipt({ ...receipt, email: e.target.value })} />
+          </Field>
+        </div>
+      )}
       {/* 사람은 안 보이는 칸 — 자동 등록 프로그램만 채운다 */}
       <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
         <label>

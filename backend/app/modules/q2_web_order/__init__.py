@@ -18,7 +18,10 @@ def register(app, ctx) -> None:
     if hasattr(app, "routes"):
         from .router import router
 
+        from .router import admin_router
+
         app.include_router(router)
+        app.include_router(admin_router)
 
 
 MODULE = ModuleSpec(name="q2_web_order", title="웹 주문서", quarter=2, register=register, requires=("q1_orders",))

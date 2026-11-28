@@ -1,6 +1,8 @@
 // fetch 래퍼: 토큰, 한국어 오류 메시지, 서버 깨우는 중 표시, 파일 받기
 
 const BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").replace(/\/$/, "");
+/** 서버 주소 + 경로 (카카오 로그인처럼 브라우저가 직접 이동해야 하는 곳) */
+export const apiUrl = (path: string) => `${BASE}${path}`;
 const TOKEN_KEY = "fo_token";
 
 export class ApiError extends Error {

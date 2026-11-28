@@ -108,6 +108,7 @@ export interface Product {
   sold_out: boolean;
   lead_days: number | null;
   image_url: string;
+  detail: string;
   tax_type: "과세" | "면세" | "";
   container_item: string;
   box_item: string;
@@ -479,6 +480,9 @@ export interface ShopProduct {
   sold_out: boolean;
   image_url: string;
   lead_days: number;
+  detail: string;
+  review_avg: number | null;
+  review_count: number;
 }
 
 export interface ShopInfo {
@@ -499,6 +503,27 @@ export interface ShopInfo {
   products: ShopProduct[];
   pay_client_key: string; // 비면 온라인 결제 꺼짐 (계좌 입금만)
   pay_test_mode: boolean;
+  kakao_login: boolean;
+}
+
+export interface ShopReview {
+  review_id: string;
+  created_at: string;
+  product_name: string;
+  spec: string;
+  author: string;
+  rating: number;
+  text: string;
+}
+export interface ShopReviewList {
+  average: number | null;
+  count: number;
+  items: ShopReview[];
+}
+export interface AdminReview extends ShopReview {
+  order_id: string;
+  customer_id: string;
+  hidden: boolean;
 }
 
 /** 결제창 띄우기 전 서버가 정해 준 값 (금액은 서버 계산) */
@@ -524,6 +549,9 @@ export interface GuestOrderInput {
   website: string;
   client_token: string;
   password?: string;
+  receipt_type?: "" | "현금영수증" | "세금계산서";
+  receipt_id?: string;
+  receipt_email?: string;
 }
 
 export interface GuestOrderResult {
@@ -571,6 +599,11 @@ export interface MyOrder {
   carrier: string;
   tracking_no: string;
   truck_no: string;
+  recipient_phone: string;
+  zipcode: string;
+  can_cancel: boolean;
+  cancel_note: string;
+  reviewable: string[];
 }
 
 // ---------------------------------------------------------------- 숙성 저장소 지도

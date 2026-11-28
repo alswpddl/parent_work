@@ -7,6 +7,9 @@ import type {
   CarrierFormat,
   Customer,
   PayInfo,
+  ShopReview,
+  ShopReviewList,
+  AdminReview,
   Tank,
   TankMap,
   CustomerInput,
@@ -113,6 +116,16 @@ export const shopPayInfo = (orderId: string, by: { payToken?: string; phone4?: s
   });
 export const shopPayConfirm = (body: { payment_key: string; order_id: string; amount: number }) =>
   api<PublicOrder>("/api/public/shop/pay/confirm", { body, auth: false });
+export const shopCancelOrder = (orderId: string, by: { token?: string; phone4?: string }) =>
+  api<PublicOrder>("/api/public/shop/orders/cancel", { body: { order_id: orderId, phone4: by.phone4 || "" }, ...shopAuth(by.token || "") });
+export const shopReviews = (name: string) => api<ShopReviewList>("/api/public/shop/reviews", { query: { name }, auth: false });
+export const shopWriteReview = (token: string, body: { order_id: string; sku: string; rating: number; text: string }) =>
+  api<ShopReview>("/api/public/shop/reviews", { body, ...shopAuth(token) });
+export const shopKakaoComplete = (body: { ticket: string; name: string; phone: string; company: string; password: string; agree_privacy: boolean }) =>
+  api<ShopAuth>("/api/public/shop/auth/kakao/complete", { body, auth: false });
+export const adminReviews = () => api<AdminReview[]>("/api/reviews");
+export const adminHideReview = (id: string, hidden: boolean) =>
+  api<AdminReview>(`/api/reviews/${encodeURIComponent(id)}`, { method: "PATCH", query: { hidden: String(hidden) } });
 export const publicRecent = (token: string) => api<PublicOrder[]>(`/api/public/orders/${token}`, { auth: false });
 
 export const briefingPreview = () => api<Briefing>("/api/briefing/preview");

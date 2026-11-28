@@ -151,6 +151,9 @@ export interface ProductGroup {
   variants: ShopProduct[];
   description: string;
   image_url: string;
+  detail: string;
+  reviewAvg: number | null;
+  reviewCount: number;
   minPrice: number | null;
   soldOut: boolean;
 }
@@ -166,6 +169,9 @@ export function groupProducts(products: ShopProduct[]): ProductGroup[] {
       variants,
       description: variants.find((v) => v.description)?.description ?? "",
       image_url: variants.find((v) => v.image_url)?.image_url ?? "",
+      detail: variants.find((v) => v.detail)?.detail ?? "",
+      reviewAvg: variants[0]?.review_avg ?? null,
+      reviewCount: variants[0]?.review_count ?? 0,
       minPrice: prices.length ? Math.min(...prices) : null,
       soldOut: variants.every((v) => v.sold_out),
     };
@@ -191,7 +197,7 @@ export function formatPhone(s: string): string {
 /** 담은 품목 중 가장 오래 걸리는 준비일 → 쉬는 요일을 건너뛴 첫날 */
 export function minDueFor(info: ShopInfo, products: { lead_days: number }[]): string {
   if (!products.length) return info.min_due_date;
-  const lead = Math.max(...products.map((p) => p.lead_days));
+  const lead = Math.max(...products.map((p) => (Number.isFinite(p.lead_days) ? p.lead_days : 1)));
   const d = new Date();
   d.setDate(d.getDate() + lead);
   for (let i = 0; i < 7 && info.closed_weekdays.includes((d.getDay() + 6) % 7); i++) d.setDate(d.getDate() + 1);

@@ -10,14 +10,14 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CheckCircle2, ChevronLeft, CreditCard, Home as HomeIcon, MapPin, Package, Phone, Search, ShoppingBasket, User } from "lucide-react";
 import { errorMessage } from "../../api/client";
-import { shopLookup, shopMe } from "../../api/endpoints";
+import { shopCancelOrder, shopLookup, shopMe } from "../../api/endpoints";
 import type { PublicOrder } from "../../api/types";
 import { Alert, Badge, Button, CopyButton, Field, Input, Spinner, Stepper, cx } from "../../components/ui";
 import { dateKo, telHref, won } from "../../lib/format";
 import Cart from "./Cart";
 import My from "./My";
 import { Pay, PayFail, PaySuccess } from "./Pay";
-import { LabelTable, PayGuide, PayStatus, ProductArt, Row, STATUS, SectionTitle, StatusSteps, trackUrl } from "./parts";
+import { LabelTable, PayGuide, PayStatus, ProductArt, ReviewsSection, Row, STATUS, SectionTitle, ShareButton, Stars, StatusSteps, trackUrl } from "./parts";
 import { LAST_KEY, ShopProvider, digits, groupProducts, itemPath, store, useShop, type ProductGroup } from "./store";
 
 export default function ShopApp() {
@@ -216,7 +216,17 @@ function Home() {
             )}
             <div className="flex items-baseline justify-between gap-2 border-b-2 border-brand px-4 pb-2 pt-3">
               <h3 className="font-serif text-2xl font-bold text-brand-dark">{g.name}</h3>
-              {g.soldOut && <Badge tone="red">품절</Badge>}
+              {g.soldOut ? (
+                <Badge tone="red">품절</Badge>
+              ) : (
+                g.reviewCount > 0 &&
+                g.reviewAvg !== null && (
+                  <span className="flex items-baseline gap-1 text-sm">
+                    <Stars value={g.reviewAvg} size="text-sm" />
+                    <span className="text-stone-500">({g.reviewCount})</span>
+                  </span>
+                )
+              )}
             </div>
             <LabelTable
               rows={[
@@ -301,7 +311,17 @@ function Item({ name }: { name: string }) {
           <ProductArt name={g.name} image={g.image_url} big />
         </div>
       ) : null}
-      <h1 className="border-b-2 border-brand pb-2 font-serif text-3xl font-bold text-brand-dark">{g.name}</h1>
+      <div className="flex items-end justify-between gap-2 border-b-2 border-brand pb-2">
+        <h1 className="font-serif text-3xl font-bold text-brand-dark">{g.name}</h1>
+        <ShareButton title={`${s.info?.factory_name ?? ""} ${g.name}`.trim()} text={g.description || g.name} />
+      </div>
+      {g.reviewCount > 0 && g.reviewAvg !== null && (
+        <a href="#reviews" className="mt-2 flex items-baseline gap-1.5">
+          <Stars value={g.reviewAvg} />
+          <b>{g.reviewAvg.toFixed(1)}</b>
+          <span className="text-sm text-stone-500 underline underline-offset-2">후기 {g.reviewCount}개</span>
+        </a>
+      )}
       {g.description && <p className="mt-3 break-keep text-lg text-stone-700">{g.description}</p>}
 
       <SectionTitle>규격·수량 고르기</SectionTitle>
@@ -329,6 +349,16 @@ function Item({ name }: { name: string }) {
             </div>
           );
         })}
+      </div>
+
+      {g.detail && (
+        <section className="mt-8">
+          <h2 className="mb-3 border-b border-line pb-2 text-xl font-extrabold text-brand-dark">상품 설명</h2>
+          <p className="whitespace-pre-line break-keep leading-relaxed text-stone-800">{g.detail}</p>
+        </section>
+      )}
+      <div id="reviews" className="scroll-mt-16">
+        <ReviewsSection name={g.name} />
       </div>
 
       <div className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 px-4 pt-3 backdrop-blur">
@@ -505,6 +535,24 @@ function Lookup() {
             {r.tracking_no && <Row k="송장" v={`${r.carrier} ${r.tracking_no}`} />}
             {r.truck_no && <Row k="화물차" v={r.truck_no} />}
           </dl>
+          {r.status === "접수" && (
+            <Button
+              block
+              size="md"
+              variant="ghost"
+              className="mt-3"
+              onClick={async () => {
+                if (!window.confirm(`주문 ${r.order_id}을(를) 취소할까요?`)) return;
+                try {
+                  setR(await shopCancelOrder(r.order_id, { phone4: digits(phone4) }));
+                } catch (e) {
+                  setError(errorMessage(e));
+                }
+              }}
+            >
+              주문 취소
+            </Button>
+          )}
           {!r.paid && r.status !== "취소" && s.info?.pay_client_key && (
             <Link to={`/shop/pay/${encodeURIComponent(r.order_id)}?p=${digits(phone4)}`} className="mt-3 block">
               <Button block size="lg" icon={<CreditCard className="h-5 w-5" />}>카드·간편결제로 결제하기</Button>

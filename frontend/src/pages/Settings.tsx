@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { Link2, MessageCircle, Plus, RefreshCw, Send, Unlink } from "lucide-react";
 import { errorMessage } from "../api/client";
 import {
+  adminHideReview,
+  adminReviews,
   briefingPreview,
   briefingSend,
   createCustomer,
@@ -399,6 +401,7 @@ function ProductsTab() {
         )}
         </div>
       ))}
+      {has("q2_web_order") && <ReviewsAdmin />}
       {edit && (
         <ProductModal
           value={edit}
@@ -506,6 +509,15 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
         <>
           {inp("description", "주문서 설명 (한 줄)", "웹 주문서 품목 아래에 보여요. 예) 김장용 추젓")}
           {inp("image_url", "사진 주소 (선택)", "https:// 로 시작하는 사진 링크. 비우면 그림으로 보여요")}
+          <Field label="상세 설명 (선택)" hint="상품 화면 아래에 그대로 보여요. 원재료·숙성 기간·맛·보관법·드시는 법 등">
+            <Textarea
+              className="min-h-[120px]"
+              maxLength={3000}
+              value={v.detail ?? ""}
+              placeholder={"통영 앞바다 멸치와 천일염만으로 담가 2년 넘게 숙성했어요.\n김치·나물무침·국 간에 좋아요."}
+              onChange={(e) => set({ detail: e.target.value })}
+            />
+          </Field>
           <Toggle checked={v.shop_visible !== false} onChange={(x) => set({ shop_visible: x })} label="웹 주문서에 보이기" />
           <Toggle checked={!!v.sold_out} onChange={(x) => set({ sold_out: x })} label="품절 (주문서에 '품절'로 보이고 주문은 안 받아요)" />
         </>
@@ -516,6 +528,46 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
 }
 
 // ================================================================ 카톡·알림
+/** 구매 후기 — 부모님이 보고, 이상한 글은 숨기기 */
+function ReviewsAdmin() {
+  const toast = useToast();
+  const { busy, run } = useAction();
+  const list = useAsync(adminReviews, []);
+  const items = list.data ?? [];
+  return (
+    <Card title={`구매 후기${items.length ? ` (${items.length})` : ""}`}>
+      <LoadState loading={list.loading} error={list.error} onRetry={list.reload} />
+      {!list.loading && items.length === 0 && <p className="text-stone-500">아직 후기가 없어요. 출고가 끝난 손님이 마이페이지에서 남길 수 있어요.</p>}
+      <ul className="divide-y divide-line">
+        {items.slice(0, 30).map((r) => (
+          <li key={r.review_id} className={`py-2.5 ${r.hidden ? "opacity-50" : ""}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm">
+                <span className="text-amber-500">{"★".repeat(r.rating)}</span> <b>{r.product_name}</b> {r.spec} · {r.author} · {r.created_at} · {r.order_id}
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={busy === r.review_id}
+                onClick={() =>
+                  run(r.review_id, async () => {
+                    const u = await adminHideReview(r.review_id, !r.hidden);
+                    list.setData((xs) => xs?.map((x) => (x.review_id === u.review_id ? u : x)));
+                    toast(u.hidden ? "후기를 숨겼어요." : "후기를 다시 보여요.");
+                  }, (m) => toast(m, "error"))
+                }
+              >
+                {r.hidden ? "다시 보이기" : "숨기기"}
+              </Button>
+            </div>
+            {r.text && <p className="mt-0.5 break-keep">{r.text}</p>}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 function KakaoTab() {
   const toast = useToast();
   const { has, features } = useFeatures();
