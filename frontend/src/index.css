@@ -33,6 +33,15 @@ button {
 .safe-bottom {
   padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
 }
+/* 아이폰 노치·갤럭시 펀치홀 아래로 머리 막대가 내려오게 (홈 화면 앱으로 열었을 때) */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+/* 주소창이 줄었다 늘었다 하는 휴대폰에서도 화면 높이 맞추기 (옛 브라우저는 100vh) */
+.min-h-dvh { min-height: 100vh; min-height: 100dvh; }
+.h-dvh { height: 100vh; height: 100dvh; }
+/* 아이폰이 글자 크기를 멋대로 키우지 않게, 가로로 돌려도 같은 크기 */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 @media print {
   nav,
   .no-print {

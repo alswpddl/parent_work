@@ -51,7 +51,7 @@ export default function SelfOrder() {
   };
 
   return (
-    <div className="mx-auto min-h-screen max-w-lg px-4 pb-32 pt-6">
+    <div className="mx-auto min-h-dvh max-w-lg px-4 pb-32 pt-6 md:max-w-2xl">
       <header className="mb-5">
         <div className="text-sm text-stone-500">주문서</div>
         <h1 className="text-3xl font-extrabold">{f.customer_name}</h1>

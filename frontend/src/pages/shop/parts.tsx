@@ -420,9 +420,9 @@ export function BackToTop({ raised }: { raised?: boolean }) {
 /** 서버가 깨어나는 동안 보여 주는 빈 화면 틀 (빙글빙글 대신) */
 export function ShopSkeleton() {
   return (
-    <div className="min-h-screen bg-paper" aria-busy="true" aria-label="주문서를 여는 중">
-      <div className="h-14 bg-brand" />
-      <div className="mx-auto max-w-lg space-y-3 px-4 pt-6">
+    <div className="min-h-dvh bg-paper" aria-busy="true" aria-label="주문서를 여는 중">
+      <div className="safe-top h-14 bg-brand" />
+      <div className="mx-auto max-w-lg space-y-3 px-4 pt-6 md:max-w-3xl">
         <div className="skeleton h-7 w-3/4" />
         <div className="skeleton h-7 w-1/2" />
         <div className="skeleton mt-6 h-24 w-full" />

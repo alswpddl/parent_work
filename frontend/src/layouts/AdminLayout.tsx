@@ -74,9 +74,9 @@ export default function AdminLayout({ onLogout }: { onLogout: () => void }) {
   };
 
   return (
-    <div className="min-h-screen md:flex">
+    <div className="min-h-dvh md:flex">
       {/* 데스크톱 왼쪽 메뉴 — 흰 바탕, 묶음별 제목 */}
-      <aside className="no-print sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-white md:flex">
+      <aside className="no-print sticky top-0 hidden h-dvh w-56 shrink-0 lg:w-64 flex-col border-r border-line bg-white md:flex">
         <div className="flex h-16 items-center border-b border-line px-5">
           <Brand />
         </div>
@@ -121,8 +121,8 @@ export default function AdminLayout({ onLogout }: { onLogout: () => void }) {
 
       <div className="min-w-0 flex-1">
         {/* 위 막대: 휴대폰은 표식, 컴퓨터는 지금 화면 이름 + 오늘 날짜 */}
-        <header className="no-print sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur">
-          <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-4 md:h-16 md:px-8">
+        <header className="no-print safe-top sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur">
+          <div className="mx-auto flex h-14 max-w-5xl items-center 2xl:max-w-6xl justify-between gap-3 px-4 md:h-16 md:px-8">
             <div className="md:hidden">
               <Brand compact />
             </div>
@@ -137,7 +137,7 @@ export default function AdminLayout({ onLogout }: { onLogout: () => void }) {
             </span>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:px-8 md:pb-12 md:pt-8">
+        <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:px-6 md:pb-12 md:pt-8 lg:px-8 2xl:max-w-6xl">
           {slow && (
             <div className="no-print sticky top-16 z-40 mb-3 flex items-center gap-2 rounded-xl bg-ink px-4 py-3 font-semibold text-white shadow-pop">
               <Loader2 className="h-5 w-5 animate-spin" /> 서버를 깨우는 중이에요. 잠시만 기다려 주세요…

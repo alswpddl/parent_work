@@ -109,9 +109,9 @@ function Shell() {
 
   const showTabs = page.name !== "cart" && page.name !== "item";
   return (
-    <div className="min-h-screen bg-paper">
-      <header className="sticky top-0 z-30 bg-brand text-white">
-        <div className="mx-auto flex h-14 max-w-lg items-center justify-between gap-1 px-2">
+    <div className="min-h-dvh bg-paper">
+      <header className="safe-top sticky top-0 z-30 bg-brand text-white">
+        <div className="mx-auto flex h-14 max-w-lg items-center justify-between gap-1 px-2 md:max-w-3xl lg:h-16 lg:max-w-6xl lg:px-4">
           {subTitle ? (
             <>
               <button type="button" onClick={back} aria-label="뒤로" className="flex h-10 w-10 shrink-0 items-center justify-center rounded hover:bg-white/10">
@@ -132,6 +132,12 @@ function Shell() {
                 {s.info.factory_name}
               </Link>
               <div className="flex items-center gap-1">
+                {/* 태블릿·컴퓨터: 아래 탭 대신 위에 메뉴 */}
+                <nav className="mr-2 hidden items-center gap-1 md:flex" aria-label="메뉴">
+                  <Link to={SHOP_HOME} className="rounded px-3 py-2 text-[15px] font-semibold text-white/85 hover:bg-white/10 hover:text-white">상품</Link>
+                  {!s.auth && <Link to={`${SP}/lookup`} className="rounded px-3 py-2 text-[15px] font-semibold text-white/85 hover:bg-white/10 hover:text-white">주문 조회</Link>}
+                  {s.info.factory_phone && <a href={telHref(s.info.factory_phone)} className="rounded px-3 py-2 text-[15px] font-semibold text-white/85 hover:bg-white/10 hover:text-white">전화 주문 {s.info.factory_phone}</a>}
+                </nav>
                 <Link to={`${SP}/my`} className="flex h-10 items-center gap-1 rounded px-3 text-sm font-bold text-white/90 hover:bg-white/10" aria-label="마이페이지">
                   <User className="h-5 w-5" />
                   {s.auth ? <span className="max-w-[5rem] truncate">{s.auth.profile.name}님</span> : "로그인"}
@@ -143,7 +149,15 @@ function Shell() {
         </div>
       </header>
 
-      <main className={cx("mx-auto max-w-lg px-4", page.name === "item" ? "pt-0" : "pt-4", showTabs ? "pb-28" : "pb-44")}>
+      <main
+        className={cx(
+          "mx-auto max-w-lg px-4",
+          // 홈·상품은 컴퓨터에서 넓게, 장바구니·마이페이지 같은 입력 화면은 읽기 좋은 폭으로
+          page.name === "home" || page.name === "item" ? "md:max-w-3xl lg:max-w-6xl" : "md:max-w-2xl",
+          page.name === "item" ? "pt-0" : "pt-4 lg:pt-8",
+          showTabs ? "pb-28 md:pb-12" : page.name === "item" ? "pb-44 lg:pb-12" : "pb-44",
+        )}
+      >
         {page.name === "home" && <Home />}
         {page.name === "item" && <Item name={page.item} />}
         {page.name === "cart" && <Cart />}
@@ -202,8 +216,8 @@ function TabBar({ active }: { active: Page["name"] }) {
     </Link>
   );
   return (
-    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 backdrop-blur">
-      <div className="mx-auto flex max-w-lg">
+    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 backdrop-blur md:hidden">
+      <div className="mx-auto flex max-w-lg md:max-w-2xl">
         {tab(SHOP_HOME, active === "home", <HomeIcon className="h-6 w-6" />, "홈")}
         {tab(`${SP}/cart`, false, <ShoppingBasket className="h-6 w-6" />, "장바구니", s.cartCount)}
         {s.auth
@@ -253,17 +267,21 @@ function Home() {
 
       {info.notice && <p className="mb-4 whitespace-pre-line break-keep border-l-4 border-brine bg-brine-soft px-4 py-3">{info.notice}</p>}
 
+      <div className="lg:grid lg:grid-cols-[1fr_360px] lg:items-start lg:gap-8">
+      <div className="min-w-0">
       {s.auth && <LastOrder />}
 
       <h2 className="sr-only">상품</h2>
       {groups.length === 0 && <Alert tone="info">지금은 주문할 수 있는 상품이 없어요. 전화로 문의해 주세요.</Alert>}
-      <div className="space-y-4">
+      <div className={groups.length > 1 ? "space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0" : "space-y-4"}>
         {groups.map((g) => (
           <ProductCard key={g.name} g={g} />
         ))}
       </div>
 
-      <dl className="mt-6 divide-y divide-line rounded-lg border border-line bg-white text-[15px]">
+      </div>
+      <aside className="lg:sticky lg:top-24">
+      <dl className="mt-6 divide-y divide-line rounded-lg border border-line bg-white text-[15px] lg:mt-0">
         <InfoRow k="택배비" v={shipLine(info).replace(/^택배비 /, "")} />
         <InfoRow k="받는 날" v={`${dateKo(info.min_due_date)}부터${new Set(info.products.map((p) => p.lead_days)).size > 1 ? " (품목마다 달라요)" : ""}`} sub={info.closed_days_text ? `${info.closed_days_text}요일은 택배가 쉬어요` : ""} />
         <InfoRow k="결제" v={info.pay_client_key ? "카드·간편결제 또는 계좌 입금" : "계좌 입금 (주문 후 안내)"} />
@@ -299,6 +317,8 @@ function Home() {
           </p>
         )}
       </details>
+      </aside>
+      </div>
     </div>
   );
 }
@@ -493,10 +513,41 @@ function Item({ name }: { name: string }) {
     return true;
   };
 
+  // 장바구니·바로 구매 칸 — 휴대폰·태블릿은 아래 고정, 컴퓨터는 규격 고르는 칸 바로 밑
+  const buyBox = (
+    <>
+          {count > 0 && (
+            <div className="mb-2 flex items-baseline justify-between text-sm">
+              <span className="text-stone-600">고른 상품 {count}개</span>
+              {hasPrice && <Price value={sum} className="text-lg" />}
+            </div>
+          )}
+          {g.soldOut ? (
+            <Button size="xl" block disabled>품절</Button>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                size="xl"
+                variant="ghost"
+                onClick={() => add() && toast("장바구니에 담았어요.", "ok", { label: "장바구니 보기", onClick: () => nav(`${SP}/cart`) })}
+              >
+                장바구니
+              </Button>
+              <Button size="xl" onClick={() => add() && nav(`${SP}/cart`)}>
+                바로 구매
+              </Button>
+            </div>
+          )}
+    </>
+  );
+
   return (
     <div>
+      {/* 컴퓨터: 왼쪽 사진·설명, 오른쪽 규격·구매 (쇼핑몰 PC 상품 화면처럼) */}
+      <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-10 lg:pt-6">
+      <div>
       {g.image_url && (
-        <div className="relative -mx-4 aspect-[4/3] overflow-hidden border-b border-line">
+        <div className="relative -mx-4 aspect-[4/3] overflow-hidden border-b border-line lg:mx-0 lg:rounded-xl lg:border">
           <ProductArt name={g.name} image={g.image_url} big />
         </div>
       )}
@@ -531,7 +582,9 @@ function Item({ name }: { name: string }) {
         </div>
       )}
 
-      <h2 className="mb-2 mt-6 text-lg font-extrabold text-brand-dark">규격·수량</h2>
+      </div>
+      <div className="lg:sticky lg:top-20">
+      <h2 className="mb-2 mt-6 text-lg font-extrabold text-brand-dark lg:mt-0">규격·수량</h2>
       <div id="options" className={cx("scroll-mt-28 divide-y divide-line overflow-hidden rounded-lg border bg-white transition-colors", nudge ? "border-brine ring-2 ring-brine/40" : "border-line")}>
         {g.variants.map((v) => {
           const q = pick[v.sku] ?? 0;
@@ -561,6 +614,10 @@ function Item({ name }: { name: string }) {
             </div>
           );
         })}
+      </div>
+
+      <div className="mt-4 hidden rounded-lg border border-line bg-white p-4 lg:block">{buyBox}</div>
+      </div>
       </div>
 
       {/* 따라오는 탭: 상품 정보 · 후기 · 배송·문의 */}
@@ -619,31 +676,8 @@ function Item({ name }: { name: string }) {
         </dl>
       </section>
 
-      <div className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white px-4 pt-2">
-        <div className="mx-auto max-w-lg">
-          {count > 0 && (
-            <div className="mb-2 flex items-baseline justify-between text-sm">
-              <span className="text-stone-600">고른 상품 {count}개</span>
-              {hasPrice && <Price value={sum} className="text-lg" />}
-            </div>
-          )}
-          {g.soldOut ? (
-            <Button size="xl" block disabled>품절</Button>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                size="xl"
-                variant="ghost"
-                onClick={() => add() && toast("장바구니에 담았어요.", "ok", { label: "장바구니 보기", onClick: () => nav(`${SP}/cart`) })}
-              >
-                장바구니
-              </Button>
-              <Button size="xl" onClick={() => add() && nav(`${SP}/cart`)}>
-                바로 구매
-              </Button>
-            </div>
-          )}
-        </div>
+      <div className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white px-4 pt-2 lg:hidden">
+        <div className="mx-auto max-w-2xl">{buyBox}</div>
       </div>
     </div>
   );

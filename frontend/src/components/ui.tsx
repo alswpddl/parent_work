@@ -345,7 +345,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
-        className={cx("flex max-h-[92vh] w-full flex-col rounded-t-3xl bg-white shadow-pop md:rounded-3xl", wide ? "md:max-w-4xl" : "md:max-w-xl")}
+        className={cx("flex max-h-[92dvh] w-full flex-col rounded-t-3xl bg-white shadow-pop md:rounded-3xl", wide ? "md:max-w-4xl" : "md:max-w-xl")}
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
           <h2 className="text-xl font-bold">{title}</h2>

@@ -35,6 +35,7 @@ import {
   uploadProductImage,
 } from "../api/endpoints";
 import type { AppSettings, Customer, Order, Product, SystemStatus } from "../api/types";
+import { MessageLogList } from "../components/MessageLogList";
 import { PushCard } from "../components/PushCard";
 import { DEFAULT_REFUND } from "./shop/Policy";
 import { useToast } from "../components/Toast";
@@ -662,16 +663,7 @@ function KakaoTab() {
 
       <Card title="최근 발송 기록">
         <LoadState loading={logs.loading} error={logs.error} />
-        {logs.data?.length === 0 && <Empty>아직 보낸 메시지가 없어요.</Empty>}
-        {logs.data?.map((m, i) => (
-          <div key={i} className="border-b border-dashed border-line py-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-sm text-stone-500">{m.ts} · {m.channel} · {m.kind} → {m.to}</span>
-              <Badge tone={m.result === "성공" ? "green" : m.result === "실패" ? "red" : "gray"}>{m.result}</Badge>
-            </div>
-            {m.error && <div className="text-sm text-red-700">{m.error}</div>}
-          </div>
-        ))}
+        {logs.data && <MessageLogList items={logs.data} />}
       </Card>
       {tplOpen && <TemplatesModal onClose={() => setTplOpen(false)} />}
     </div>
