@@ -110,3 +110,84 @@ def test_kakao_login_new_and_link(full_ctx, http):
     assert linked.token
     http.queue("/v2/user/me", 200, {"id": 222})
     assert s.kakao_callback("code4", state).token
+
+
+def test_google_login_new_then_direct(full_ctx, http):
+    s = _svc(full_ctx)
+    with pytest.raises(ValidationFailed, match="구글"):
+        s.google_start_url()  # 키 없으면 꺼짐
+    full_ctx.config.google_client_id = "gid.apps.googleusercontent.com"
+    full_ctx.config.google_client_secret = "gsecret"
+    url = s.google_start_url()
+    assert url.startswith("https://accounts.google.com/o/oauth2/v2/auth?") and "scope=openid+email+profile" in url
+    assert "api.example.com%2Fapi%2Fpublic%2Fshop%2Fauth%2Fgoogle%2Fcallback" in url
+    state = url.split("state=")[1].split("&")[0]
+    with pytest.raises(UnauthorizedError):
+        s.google_callback("c", s.kakao_start_url().split("state=")[1])  # 카카오 표로는 안 됨
+
+    http.queue("oauth2.googleapis.com/token", 200, {"access_token": "g-acc", "id_token": "x"})
+    http.queue("openidconnect.googleapis.com", 200, {"sub": "g-123", "name": "Minje Choi", "email": "m@example.com"})
+    r = s.google_callback("code1", state)
+    assert r.ticket and not r.token and r.nickname == "Minje Choi"
+    tok = http.by("oauth2.googleapis.com/token")[0]["form"]
+    assert tok["client_secret"] == "gsecret" and tok["code"] == "code1"
+
+    auth = s.kakao_complete(KakaoCompleteIn(ticket=r.ticket, name="최민제", phone="010-7777-3333", agree_privacy=True))
+    row = full_ctx.customers.get(s.member(auth.token).customer_id, fresh=True)
+    assert row["google_id"] == "g-123" and not row.get("kakao_id")
+
+    http.queue("oauth2.googleapis.com/token", 200, {"access_token": "g-acc2"})
+    http.queue("openidconnect.googleapis.com", 200, {"sub": "g-123"})
+    assert s.google_callback("code2", state).token  # 다음부터는 바로 로그인
+
+    http.queue("oauth2.googleapis.com/token", 400, {"error": "invalid_grant"})
+    with pytest.raises(ValidationFailed, match="구글 로그인에 실패"):
+        s.google_callback("bad", state)
+
+
+def test_password_signup_closed_by_default(full_ctx):
+    s = _svc(full_ctx)
+    full_ctx.config.allow_password_signup = False
+    with pytest.raises(ValidationFailed, match="카카오나 구글"):
+        s.signup(SignupIn(name="아무개", phone="010-1111-2222", password="1234", agree_privacy=True))
+    # 주문하면서 비밀번호를 보내도 가입은 안 되고 주문만 들어감
+    done = s.place(_body(password="1234", client_token="pw-off"))
+    assert done.order_id and not done.token
+
+
+def test_guest_lookup_with_sms_code(full_ctx, http):
+    import re as _re
+
+    from app.modules.q2_web_order.extras import GuestCodeIn, GuestVerifyIn
+
+    s = _svc(full_ctx)
+    assert s.sms_verify_enabled  # 테스트 설정엔 솔라피 키·발신번호가 있음
+    mine = s.place(_body(client_token="g1"))  # 010-7777-8888 로 주문
+    out = s.guest_send_code(GuestCodeIn(name="김 영희", phone="010-7777-8888"), "1.2.3.4")
+    sms = http.by("api.solapi.com")[-1]["json"]["messages"][0]
+    assert sms["to"] == "01077778888" and sms["from"] == "0310000000" and "인증번호" in sms["text"]
+    code = _re.search(r"\[(\d{6})\]", sms["text"]).group(1)
+
+    with pytest.raises(ValidationFailed, match="맞지 않아요"):
+        s.guest_orders(GuestVerifyIn(name="김영희", phone="01077778888", code="000000" if code != "000000" else "111111", verify_token=out.verify_token))
+    with pytest.raises(UnauthorizedError):  # 다른 번호로 표 재사용 불가
+        s.guest_orders(GuestVerifyIn(name="김영희", phone="010-1234-5678", code=code, verify_token=out.verify_token))
+    found = s.guest_orders(GuestVerifyIn(name="김영희", phone="010-7777-8888", code=code, verify_token=out.verify_token))
+    assert [o.order_id for o in found] == [mine.order_id]
+    # 이름이 다르면 같은 번호여도 안 보임
+    assert s.guest_orders(GuestVerifyIn(name="박철수", phone="010-7777-8888", code=code, verify_token=out.verify_token)) == []
+
+
+def test_guest_code_limits_and_off(full_ctx):
+    from app.core.errors import TooManyRequests
+    from app.modules.q2_web_order.extras import GuestCodeIn
+
+    s = _svc(full_ctx)
+    for _ in range(5):
+        s.guest_send_code(GuestCodeIn(name="김영희", phone="010-7777-9999"), "9.9.9.9")
+    with pytest.raises(TooManyRequests):
+        s.guest_send_code(GuestCodeIn(name="김영희", phone="010-7777-9999"), "9.9.9.9")
+    full_ctx.solapi.sender = ""  # 발신번호 없으면 꺼짐 → 주문번호 조회로
+    assert not s.sms_verify_enabled and s.info().sms_verify is False
+    with pytest.raises(ValidationFailed, match="주문번호"):
+        s.guest_send_code(GuestCodeIn(name="김영희", phone="010-7777-1234"))

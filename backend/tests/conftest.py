@@ -152,6 +152,7 @@ def full_ctx(http):
         kakao_rest_api_key="kakao-key", solapi_api_key="sk", solapi_api_secret="ss", solapi_pfid="PF1",
         solapi_sender="0310000000", solapi_tpl_parcel="TPL_P", solapi_tpl_truck="TPL_T",
         solapi_tpl_statement="TPL_S", auth_secret="s" * 40,
+        allow_password_signup=True,  # 예전 회원 기능 테스트용 (운영은 닫힘)
     )
     mailer = Mailer(host="smtp.test", port=465, user="u@test.com", password="pw", smtp_factory=FakeSMTP)
     c = build_context(cfg, backend=MemoryBackend(), claude=ClaudeClient("", "m"), http=http, mailer=mailer)

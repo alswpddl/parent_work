@@ -58,6 +58,26 @@ class SolapiClient:
     def configured(self) -> bool:
         return bool(self.api_key and self.api_secret and self.pfid)
 
+    @property
+    def sms_ready(self) -> bool:
+        """문자(SMS) 발송 준비: 키·시크릿 + 솔라피에 등록한 발신번호 (알림톡 채널 없어도 됨)"""
+        return bool(self.api_key and self.api_secret and self.sender)
+
+    def send_sms(self, *, to: str, text: str) -> dict:
+        if not self.sms_ready:
+            raise SolapiError("문자 발송 설정(API 키·시크릿·발신번호)이 비어 있어요.")
+        if not is_mobile(to):
+            raise SolapiError("휴대폰 번호가 아니라 문자를 보낼 수 없어요.")
+        body = {"messages": [{"to": normalize_phone(to), "from": self.sender, "text": text}]}
+        res = self.http("POST", API_URL, headers={"Authorization": self.auth_header()}, json_body=body)
+        data = res.json()
+        if not res.ok:
+            raise SolapiError(f"솔라피 오류({res.status}): {data.get('errorMessage') or data.get('message') or data}")
+        failed = data.get("failedMessageList") or []
+        if failed:
+            raise SolapiError(f"문자 발송 실패: {failed[0].get('statusMessage') or failed[0].get('reason') or failed}")
+        return {"group_id": (data.get("groupInfo") or {}).get("groupId", "")}
+
     def auth_header(self, *, date: str | None = None, salt: str | None = None) -> str:
         date = date or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         salt = salt or secrets.token_hex(16)

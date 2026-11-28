@@ -24,7 +24,7 @@ from .test_parser_and_matching import SAMPLE  # noqa: E402
 def client():
     cfg = AppConfig(
         app_env="test", sheets_backend="memory", sheets_cache_ttl=0, admin_pin="2580", auth_secret="x" * 40,
-        seed_demo_data=False,
+        seed_demo_data=False, allow_password_signup=True,  # 예전 회원 기능 테스트용 (운영은 닫힘)
     )
     app = create_app(cfg, backend=MemoryBackend(), claude=ClaudeClient("", "m"))
     with TestClient(app) as c:

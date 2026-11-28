@@ -19,6 +19,9 @@ WebOrderService 가 이 클래스를 함께 물려받는다 (self.ctx, self.memb
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
+import re
 import secrets
 from typing import Any
 from urllib.parse import urlencode
@@ -36,6 +39,27 @@ from .accounts import check_password, issue_token
 
 KAUTH = "https://kauth.kakao.com"
 KAPI = "https://kapi.kakao.com"
+GAUTH = "https://accounts.google.com/o/oauth2/v2/auth"
+GTOKEN = "https://oauth2.googleapis.com/token"
+GUSER = "https://openidconnect.googleapis.com/v1/userinfo"
+PROVIDER_KO = {"kakao": "카카오", "google": "구글"}
+
+
+class GuestCodeIn(BaseModel):
+    name: str = Field(default="", max_length=40)
+    phone: str = Field(min_length=9, max_length=20)
+
+
+class GuestCodeOut(BaseModel):
+    verify_token: str
+    expires_in: int
+
+
+class GuestVerifyIn(BaseModel):
+    name: str = Field(default="", max_length=40)
+    phone: str = Field(min_length=9, max_length=20)
+    code: str = Field(min_length=4, max_length=10)
+    verify_token: str = Field(min_length=10, max_length=400)
 
 
 def mask_name(name: str) -> str:
@@ -305,36 +329,86 @@ class ShopExtrasMixin:
         nick = str((props or {}).get("nickname") or "")
         return str(info["id"]), nick
 
-    def _row_by_kakao(self, kid: str) -> dict | None:
+    def _row_by_social(self, provider: str, uid: str) -> dict | None:
+        col = f"{provider}_id"
         for d in self.ctx.customers.rows(fresh=True):
-            if d.get("customer_id") and str(d.get("kakao_id") or "") == kid and d.get("active") is not False:
+            if d.get("customer_id") and str(d.get(col) or "") == uid and d.get("active") is not False:
                 return d
         return None
+
+    def _row_by_kakao(self, kid: str) -> dict | None:
+        return self._row_by_social("kakao", kid)
+
+    def _social_result(self, provider: str, uid: str, nick: str) -> KakaoResult:
+        """이미 연결된 손님 → 바로 로그인 표, 처음 → 이름·번호를 받는 30분짜리 가입 표"""
+        row = self._row_by_social(provider, uid)
+        if row is not None and row.get("web_password"):
+            return KakaoResult(token=issue_token(self._key, row["customer_id"], row["web_password"]), nickname=nick)
+        nick_b64 = base64.urlsafe_b64encode(nick.encode()).decode()[:80]
+        return KakaoResult(ticket=sign(self._key, f"{provider}:{uid}:{nick_b64}", 1800), nickname=nick)
 
     def kakao_callback(self, code: str, state: str) -> KakaoResult:
         if not (verify(self._key, state or "") or "").startswith("klogin:"):
             raise UnauthorizedError("로그인 시간이 지났어요. 다시 시도해 주세요.")
         kid, nick = self._kakao_user(code)
-        row = self._row_by_kakao(kid)
-        if row is not None and row.get("web_password"):
-            return KakaoResult(token=issue_token(self._key, row["customer_id"], row["web_password"]), nickname=nick)
-        nick_b64 = base64.urlsafe_b64encode(nick.encode()).decode()[:80]
-        return KakaoResult(ticket=sign(self._key, f"kakao:{kid}:{nick_b64}", 1800), nickname=nick)
+        return self._social_result("kakao", kid, nick)
+
+    # ================================================================ 구글 로그인
+    @property
+    def google_login_enabled(self) -> bool:
+        cfg = self.ctx.config
+        return bool(getattr(cfg, "google_client_id", "") and getattr(cfg, "google_client_secret", ""))
+
+    @property
+    def google_redirect(self) -> str:
+        return f"{self.ctx.config.public_api_url.rstrip('/')}/api/public/shop/auth/google/callback"
+
+    def google_start_url(self) -> str:
+        if not self.google_login_enabled:
+            raise ValidationFailed("구글 로그인이 아직 꺼져 있어요.")
+        state = sign(self._key, f"glogin:{secrets.token_hex(8)}", 600)
+        q = {"client_id": self.ctx.config.google_client_id, "redirect_uri": self.google_redirect, "response_type": "code",
+             "scope": "openid email profile", "state": state, "prompt": "select_account"}
+        return f"{GAUTH}?{urlencode(q)}"
+
+    def _google_user(self, code: str) -> tuple[str, str]:
+        from .service import _http_of
+
+        http = _http_of(self.ctx)
+        cfg = self.ctx.config
+        r = http("POST", GTOKEN, form={"grant_type": "authorization_code", "code": code, "client_id": cfg.google_client_id,
+                                       "client_secret": cfg.google_client_secret, "redirect_uri": self.google_redirect}, timeout=10)
+        data = r.json() if r.body else {}
+        if not r.ok or not isinstance(data, dict) or not data.get("access_token"):
+            raise ValidationFailed("구글 로그인에 실패했어요. 다시 시도해 주세요.")
+        me = http("GET", GUSER, headers={"Authorization": f"Bearer {data['access_token']}"}, timeout=10)
+        info = me.json() if me.body else {}
+        if not me.ok or not isinstance(info, dict) or not info.get("sub"):
+            raise ValidationFailed("구글 회원 정보를 받지 못했어요.")
+        return str(info["sub"]), str(info.get("name") or "")
+
+    def google_callback(self, code: str, state: str) -> KakaoResult:
+        if not (verify(self._key, state or "") or "").startswith("glogin:"):
+            raise UnauthorizedError("로그인 시간이 지났어요. 다시 시도해 주세요.")
+        sub, name = self._google_user(code)
+        return self._social_result("google", sub, name)
 
     def kakao_complete(self, body: KakaoCompleteIn) -> Any:
-        """처음 카카오로 온 손님: 이름·번호로 가입하거나 기존 계정에 연결"""
+        """처음 카카오·구글로 온 손님: 이름·번호로 가입하거나 기존 계정에 연결"""
         from .service import MOBILE_RE, AuthOut, GuestOrderIn, _attachable, _profile, digits, pretty_phone
 
         payload = verify(self._key, body.ticket) or ""
-        if not payload.startswith("kakao:"):
-            raise UnauthorizedError("시간이 지났어요. 카카오로 다시 시작해 주세요.")
+        provider = payload.split(":", 1)[0]
+        if provider not in PROVIDER_KO:
+            raise UnauthorizedError("시간이 지났어요. 처음부터 다시 시작해 주세요.")
         kid = payload.split(":")[1]
+        col, ko = f"{provider}_id", PROVIDER_KO[provider]
         if not body.agree_privacy:
             raise ValidationFailed("개인정보 수집·이용에 동의해 주셔야 가입할 수 있어요.")
         if not MOBILE_RE.match(digits(body.phone)):
             raise ValidationFailed("휴대폰 번호를 확인해 주세요 (예: 010-1234-5678).")
-        if self._row_by_kakao(kid):
-            raise ValidationFailed("이미 연결된 카카오 계정이에요. 카카오로 다시 로그인해 주세요.")
+        if self._row_by_social(provider, kid):
+            raise ValidationFailed(f"이미 연결된 {ko} 계정이에요. {ko}로 다시 로그인해 주세요.")
         phone = pretty_phone(body.phone)
         rows = self._rows_by_phone(phone)  # type: ignore[attr-defined]
         with_pw = [r for r in rows if r.get("web_password")]
@@ -342,17 +416,83 @@ class ShopExtrasMixin:
             # 같은 번호로 가입한 계정 → 그 비밀번호를 알아야 연결 (남의 계정 가로채기 방지)
             hit = next((r for r in with_pw if check_password(body.password, r.get("web_password") or "")), None)
             if hit is None:
-                raise ValidationFailed("이 번호로 가입한 계정이 있어요. 그 계정 비밀번호를 넣으면 카카오와 연결돼요.")
-            self.ctx.customers.update((hit["customer_id"],), {"kakao_id": kid})
-            self.ctx.logs.write("카카오 연결", hit["customer_id"], hit.get("name", ""), actor="웹주문서")
+                raise ValidationFailed(f"이 번호로 가입한 계정이 있어요. 그 계정 비밀번호를 넣으면 {ko}와 연결돼요.")
+            self.ctx.customers.update((hit["customer_id"],), {col: kid})
+            self.ctx.logs.write(f"{ko} 연결", hit["customer_id"], hit.get("name", ""), actor="웹주문서")
             c = CustomerOut.from_row(self.ctx.customers.get(hit["customer_id"], fresh=True) or {})
             return AuthOut(token=issue_token(self._key, c.customer_id, hit["web_password"]), profile=_profile(c))
         probe = GuestOrderIn.model_construct(name=body.name, company=body.company, phone=phone, address="", zipcode="")
         same = [CustomerOut.from_row(r) for r in rows]
         found = next((x for x in same if _attachable(x) and self._same_person(x, probe)), None)  # type: ignore[attr-defined]
         c = found or self._new_customer(probe, phone, same)  # type: ignore[attr-defined]
-        marker = f"kakao:{secrets.token_hex(12)}"
-        self.ctx.customers.update((c.customer_id,), {"kakao_id": kid, "web_password": marker, "privacy_agreed_at": now()})
-        self.ctx.logs.write("카카오 가입", c.customer_id, c.name, actor="웹주문서")
+        marker = f"{provider}:{secrets.token_hex(12)}"
+        self.ctx.customers.update((c.customer_id,), {col: kid, "web_password": marker, "privacy_agreed_at": now()})
+        self.ctx.logs.write(f"{ko} 가입", c.customer_id, c.name, actor="웹주문서")
         fresh = CustomerOut.from_row(self.ctx.customers.get(c.customer_id, fresh=True) or {})
         return AuthOut(token=issue_token(self._key, c.customer_id, marker), profile=_profile(fresh))
+
+    # ================================================================ 비회원 조회: 이름 + 휴대폰 + 문자 인증번호
+    # 인증번호는 서버에 저장하지 않는다: 번호+인증번호의 지문을 서명한 5분짜리 표를 손님에게 주고, 확인할 때 다시 계산해 비교.
+    @property
+    def sms_verify_enabled(self) -> bool:
+        sol = getattr(self.ctx, "solapi", None)
+        return bool(sol and sol.sms_ready)
+
+    def _guest_limiters(self):
+        from .service import _Limiter
+
+        if not hasattr(self, "_gl"):
+            self._gl = (
+                _Limiter(5, 3600, "인증번호를 너무 많이 받았어요. 1시간 뒤 다시 해 주시거나 전화 주세요."),  # 번호마다
+                _Limiter(20, 3600, "인증 요청이 너무 많아요. 잠시 뒤 다시 해 주세요."),  # 접속 주소마다
+                _Limiter(5, 300, "인증번호를 여러 번 틀렸어요. 인증번호를 다시 받아 주세요."),  # 표마다
+            )
+        return self._gl
+
+    def _code_digest(self, phone: str, code: str) -> str:
+        return hmac.new(self._key.encode(), f"gv:{phone}:{code}".encode(), hashlib.sha256).hexdigest()[:20]
+
+    def guest_send_code(self, body: GuestCodeIn, client_ip: str = "") -> GuestCodeOut:
+        from .service import MOBILE_RE, digits
+
+        if not self.sms_verify_enabled:
+            raise ValidationFailed("문자 인증이 아직 준비되지 않았어요. 주문번호로 조회해 주세요.")
+        phone = digits(body.phone)
+        if not body.name.strip():
+            raise ValidationFailed("주문하신 분 성함을 적어 주세요.")
+        if not MOBILE_RE.match(phone):
+            raise ValidationFailed("휴대폰 번호를 확인해 주세요 (예: 010-1234-5678).")
+        per_phone, per_ip, _ = self._guest_limiters()
+        per_phone.check(phone)
+        per_ip.check(client_ip or "anon")
+        code = f"{secrets.randbelow(10**6):06d}"
+        st = self.ctx.settings.load()
+        try:
+            self.ctx.solapi.send_sms(to=phone, text=f"[{st.factory_name or '주문서'}] 주문 조회 인증번호 [{code}]\n5분 안에 입력해 주세요.")
+        except Exception as e:  # noqa: BLE001
+            self.ctx.messages.write(channel="문자", kind="조회인증", to=phone[-4:], result="실패", error=str(e))
+            raise ValidationFailed("인증번호를 보내지 못했어요. 잠시 뒤 다시 해 주시거나 전화 주세요.") from e
+        per_phone.hit(phone)
+        per_ip.hit(client_ip or "anon")
+        self.ctx.messages.write(channel="문자", kind="조회인증", to=phone[-4:], result="성공")
+        return GuestCodeOut(verify_token=sign(self._key, f"gv:{phone}:{self._code_digest(phone, code)}", 300), expires_in=300)
+
+    def guest_orders(self, body: GuestVerifyIn, client_ip: str = "") -> list[PublicOrderOut]:
+        from .service import digits
+
+        phone = digits(body.phone)
+        _, _, per_token = self._guest_limiters()
+        key = hashlib.sha256(body.verify_token.encode()).hexdigest()[:24]
+        per_token.check(key)
+        payload = verify(self._key, body.verify_token) or ""
+        if not payload.startswith(f"gv:{phone}:"):
+            raise UnauthorizedError("인증 시간이 지났어요. 인증번호를 다시 받아 주세요.")
+        if not hmac.compare_digest(payload.split(":")[2], self._code_digest(phone, digits(body.code))):
+            per_token.hit(key)
+            raise ValidationFailed("인증번호가 맞지 않아요. 문자를 다시 확인해 주세요.")
+        name = re.sub(r"\s", "", body.name)
+        same = lambda x: re.sub(r"\s", "", x or "") == name  # noqa: E731
+        orders = [o for o in self.ctx.orders.query(include_cancelled=True)
+                  if digits(o.phone) == phone and (same(o.customer_name) or same(o.recipient))]
+        orders.sort(key=lambda o: o.created_at.isoformat() if o.created_at else "", reverse=True)
+        return [to_public(o) for o in orders[:30]]

@@ -506,6 +506,8 @@ export interface ShopInfo {
   pay_client_key: string; // 비면 온라인 결제 꺼짐 (계좌 입금만)
   pay_test_mode: boolean;
   kakao_login: boolean;
+  google_login?: boolean;
+  sms_verify?: boolean; // 비회원 조회를 이름+휴대폰+문자 인증번호로
 }
 
 export interface ShopReview {

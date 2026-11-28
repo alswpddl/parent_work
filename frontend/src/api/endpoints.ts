@@ -116,6 +116,11 @@ export const shopPayInfo = (orderId: string, by: { payToken?: string; phone4?: s
   });
 export const shopPayConfirm = (body: { payment_key: string; order_id: string; amount: number }) =>
   api<PublicOrder>("/api/public/shop/pay/confirm", { body, auth: false });
+// 비회원 조회: 이름 + 휴대폰 번호 + 문자 인증번호
+export const shopGuestCode = (name: string, phone: string) =>
+  api<{ verify_token: string; expires_in: number }>("/api/public/shop/guest/code", { body: { name, phone }, auth: false });
+export const shopGuestOrders = (body: { name: string; phone: string; code: string; verify_token: string }) =>
+  api<PublicOrder[]>("/api/public/shop/guest/orders", { body, auth: false });
 export const shopCancelOrder = (orderId: string, by: { token?: string; phone4?: string }) =>
   api<PublicOrder>("/api/public/shop/orders/cancel", { body: { order_id: orderId, phone4: by.phone4 || "" }, ...shopAuth(by.token || "") });
 export const shopReviews = (name: string) => api<ShopReviewList>("/api/public/shop/reviews", { query: { name }, auth: false });

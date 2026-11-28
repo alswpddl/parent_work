@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Home as HomeIcon, MapPin, Package, Phone, RotateCcw, Search, ShoppingBasket, Truck, User } from "lucide-react";
 import { errorMessage } from "../../api/client";
-import { shopCancelOrder, shopLookup, shopMe, shopMyOrders, shopReviews } from "../../api/endpoints";
+import { shopCancelOrder, shopGuestCode, shopGuestOrders, shopLookup, shopMe, shopMyOrders, shopReviews } from "../../api/endpoints";
 import type { MyOrder, PublicOrder, ShopInfo, ShopReviewList } from "../../api/types";
 import { useToast } from "../../components/Toast";
 import { Alert, Badge, Button, CopyButton, Field, Input, Stepper, cx } from "../../components/ui";
@@ -19,7 +19,7 @@ import Cart from "./Cart";
 import My from "./My";
 import { Pay, PayFail, PaySuccess } from "./Pay";
 import { BackToTop, LabelTable, PayGuide, PayStatus, Price, ProductArt, ReviewsSection, Row, STATUS, ShareButton, ShopSkeleton, Stars, StatusSteps, arriveText, perKg, trackUrl } from "./parts";
-import { LAST_KEY, ShopProvider, digits, groupProducts, itemPath, store, useShop, type ProductGroup } from "./store";
+import { LAST_KEY, MOBILE_RE, ShopProvider, digits, formatPhone, groupProducts, itemPath, store, useShop, type ProductGroup } from "./store";
 import { SHOP_HOME, SP, isShopHost } from "../../lib/host";
 
 export default function ShopApp() {
@@ -700,15 +700,137 @@ function Done() {
 }
 
 // ================================================================ 비회원 주문 조회
+// 문자 인증이 켜져 있으면: 이름 + 휴대폰 번호 + 인증번호 → 그 이름·번호로 한 주문 전부
+// 꺼져 있으면(솔라피 발신번호 없음): 예전처럼 주문번호 + 전화번호 뒤 4자리
 function Lookup() {
   const s = useShop();
+  const sms = !!s.info?.sms_verify;
+  const [mode, setMode] = useState<"sms" | "order">(sms ? "sms" : "order");
+  return (
+    <div>
+      <h1 className="mb-1 text-2xl font-extrabold">비회원 주문 조회</h1>
+      <p className="mb-5 break-keep text-stone-600">
+        {mode === "sms" ? "주문할 때 적은 성함과 휴대폰 번호로 찾아요. 문자로 받은 인증번호를 넣어 주세요." : "주문 완료 화면에 나온 주문번호로 찾아요."}{" "}
+        {s.auth ? (
+          <>로그인하셨으면 <Link to={`${SP}/my`} className="font-bold text-brand underline">마이페이지</Link>에서 볼 수 있어요.</>
+        ) : (
+          <>카카오·구글로 <Link to={`${SP}/my`} className="font-bold text-brand underline">로그인</Link>하면 한 번에 볼 수 있어요.</>
+        )}
+      </p>
+      {mode === "sms" ? <SmsLookup /> : <OrderNoLookup />}
+      {sms && (
+        <button type="button" className="mt-5 w-full text-center text-[15px] font-semibold text-stone-500 underline underline-offset-2" onClick={() => setMode(mode === "sms" ? "order" : "sms")}>
+          {mode === "sms" ? "주문번호로 조회하기" : "이름·휴대폰 번호로 조회하기"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SmsLookup() {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [token, setToken] = useState("");
+  const [left, setLeft] = useState(0); // 인증번호 남은 초
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [list, setList] = useState<PublicOrder[] | null>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (left <= 0) return;
+    const t = window.setTimeout(() => setLeft((x) => x - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [left]);
+
+  const send = async () => {
+    setError("");
+    if (!name.trim()) return setError("주문하신 분 성함을 적어 주세요.");
+    if (!MOBILE_RE.test(digits(phone))) return setError("휴대폰 번호를 확인해 주세요. 예) 010-1234-5678");
+    setBusy("send");
+    try {
+      const r = await shopGuestCode(name.trim(), formatPhone(phone));
+      setToken(r.verify_token);
+      setLeft(r.expires_in);
+      setCode("");
+      setList(null);
+      window.setTimeout(() => codeRef.current?.focus(), 50);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy("");
+    }
+  };
+  const check = async () => {
+    setError("");
+    if (!token || left <= 0) return setError("인증번호를 먼저 받아 주세요.");
+    if (digits(code).length !== 6) return setError("문자로 받은 인증번호 6자리를 넣어 주세요.");
+    setBusy("check");
+    try {
+      setList(await shopGuestOrders({ name: name.trim(), phone: formatPhone(phone), code: digits(code), verify_token: token }));
+      setLeft(0);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy("");
+    }
+  };
+  const mmss = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+
+  if (list)
+    return (
+      <div>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className="font-semibold">{name}님 주문 {list.length}건</span>
+          <button type="button" className="text-sm text-stone-500 underline" onClick={() => { setList(null); setToken(""); }}>
+            다시 조회
+          </button>
+        </div>
+        {list.length === 0 && <Alert tone="info">이 성함과 번호로 들어온 주문이 없어요. 주문할 때 적은 성함인지 확인해 주세요.</Alert>}
+        <div className="space-y-3">
+          {list.map((o) => (
+            <GuestOrderCard key={o.order_id} initial={o} phone4={digits(phone).slice(-4)} />
+          ))}
+        </div>
+      </div>
+    );
+
+  return (
+    <div>
+      <Field label="주문하신 분 성함">
+        <Input value={name} autoComplete="name" placeholder="홍길동" onChange={(e) => setName(e.target.value)} />
+      </Field>
+      <Field label="휴대폰 번호">
+        <div className="flex gap-2">
+          <Input type="tel" inputMode="numeric" autoComplete="tel" value={phone} placeholder="010-1234-5678" onChange={(e) => { setPhone(formatPhone(e.target.value)); setToken(""); setLeft(0); }} />
+          <Button size="md" variant={token ? "ghost" : "primary"} className="shrink-0" loading={busy === "send"} disabled={left > 270} onClick={send}>
+            {token ? "다시 받기" : "인증번호 받기"}
+          </Button>
+        </div>
+      </Field>
+      {token && (
+        <Field
+          label="인증번호"
+          hint={left > 0 ? <span>문자로 보낸 6자리를 넣어 주세요. <b className="text-bad tabular-nums">{mmss}</b> 남음</span> : <span className="text-bad">시간이 지났어요. 다시 받아 주세요.</span>}
+        >
+          <Input ref={codeRef} value={code} inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="6자리" onChange={(e) => setCode(digits(e.target.value).slice(0, 6))} />
+        </Field>
+      )}
+      {error && <Alert tone="error">{error}</Alert>}
+      <Button size="xl" block loading={busy === "check"} disabled={!token || left <= 0} icon={<Search className="h-6 w-6" />} onClick={check}>
+        조회하기
+      </Button>
+    </div>
+  );
+}
+
+function OrderNoLookup() {
   const last = store.get<{ order_id: string; phone4: string }>(LAST_KEY, { order_id: "", phone4: "" });
   const [orderId, setOrderId] = useState(last.order_id);
   const [phone4, setPhone4] = useState(last.phone4);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [r, setR] = useState<PublicOrder | null>(null);
-
   const find = async () => {
     setError("");
     setR(null);
@@ -722,18 +844,8 @@ function Lookup() {
       setBusy(false);
     }
   };
-  const st = r ? STATUS[r.status] ?? { label: r.status, tone: "violet" as const, step: 1 } : null;
-
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-extrabold">주문 조회</h1>
-      <p className="mb-4 text-stone-600">
-        {s.auth ? (
-          <>가입하셨으면 <Link to={`${SP}/my`} className="font-bold text-brand underline">마이페이지</Link>에서 모든 주문을 볼 수 있어요.</>
-        ) : (
-          <>비회원 주문은 주문번호로 찾아요. 가입하면 <Link to={`${SP}/my`} className="font-bold text-brand underline">마이페이지</Link>에서 한 번에 볼 수 있어요.</>
-        )}
-      </p>
       <Field label="주문번호" hint="주문 완료 화면에 나온 번호예요. 예) 20261126-K7Q3">
         <Input value={orderId} autoCapitalize="characters" placeholder="20261126-K7Q3" onChange={(e) => setOrderId(e.target.value.toUpperCase())} />
       </Field>
@@ -744,55 +856,66 @@ function Lookup() {
       <Button size="xl" block loading={busy} icon={<Search className="h-6 w-6" />} onClick={find}>
         조회하기
       </Button>
-
-      {r && st && (
-        <div className="mt-5 rounded-2xl border border-line bg-white p-5">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <span className="font-extrabold">{r.order_id}</span>
-            <span className="flex items-center gap-3">
-              <span className="font-extrabold text-brand-dark">{st.label}</span>
-              <PayStatus paid={r.paid} status={r.status} />
-            </span>
-          </div>
-          <div className="mb-4"><StatusSteps status={r.status} paid={r.paid} /></div>
-          <dl className="space-y-1">
-            <Row k="주문일" v={r.created_at} />
-            <Row k="품목" v={r.items} />
-            <Row k="받는 날" v={r.due_date === "날짜 미정" ? "정해지면 알려 드려요" : r.due_date} />
-            <Row k="보내는 방법" v={r.ship_method} />
-            <Row k="입금" v={<PayStatus paid={r.paid} status={r.status} />} />
-            {r.tracking_no && <Row k="송장" v={`${r.carrier} ${r.tracking_no}`} />}
-            {r.truck_no && <Row k="화물차" v={r.truck_no} />}
-          </dl>
-          {r.status === "접수" && (
-            <Button
-              block
-              size="md"
-              variant="ghost"
-              className="mt-3"
-              onClick={async () => {
-                if (!window.confirm(`주문 ${r.order_id}을(를) 취소할까요?`)) return;
-                try {
-                  setR(await shopCancelOrder(r.order_id, { phone4: digits(phone4) }));
-                } catch (e) {
-                  setError(errorMessage(e));
-                }
-              }}
-            >
-              주문 취소
-            </Button>
-          )}
-          {!r.paid && r.status !== "취소" && s.info?.pay_client_key && (
-            <Link to={`${SP}/pay/${encodeURIComponent(r.order_id)}?p=${digits(phone4)}`} className="mt-3 block">
-              <Button block size="lg" icon={<CreditCard className="h-5 w-5" />}>카드·간편결제로 결제하기</Button>
-            </Link>
-          )}
-          {r.tracking_no && (
-            <a className="mt-4 flex items-center justify-center gap-2 rounded-xl2 bg-parcel px-4 py-3 font-bold text-white" href={trackUrl(r.carrier, r.tracking_no)} target="_blank" rel="noreferrer">
-              <MapPin className="h-5 w-5" /> 배송 위치 보기
-            </a>
-          )}
+      {r && (
+        <div className="mt-5">
+          <GuestOrderCard key={r.order_id} initial={r} phone4={digits(phone4)} />
         </div>
+      )}
+    </div>
+  );
+}
+
+/** 비회원 주문 한 건: 상태 · 입금 · 취소 · 카드 결제 · 배송 위치 */
+function GuestOrderCard({ initial, phone4 }: { initial: PublicOrder; phone4: string }) {
+  const s = useShop();
+  const [r, setR] = useState(initial);
+  const [error, setError] = useState("");
+  const st = STATUS[r.status] ?? { label: r.status, tone: "violet" as const, step: 1 };
+  return (
+    <div className="rounded-2xl border border-line bg-white p-5 shadow-card">
+      <div className="mb-3">
+        <div className="text-sm text-stone-500 tabular-nums">주문번호 {r.order_id} · {r.created_at}</div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-lg font-extrabold text-brand-dark">{st.label}</span>
+          <PayStatus paid={r.paid} status={r.status} />
+        </div>
+      </div>
+      <div className="mb-4"><StatusSteps status={r.status} paid={r.paid} /></div>
+      <dl className="space-y-1">
+        <Row k="품목" v={r.items} />
+        <Row k="받는 날" v={r.due_date === "날짜 미정" ? "정해지면 알려 드려요" : r.due_date} />
+        <Row k="보내는 방법" v={r.ship_method} />
+        {r.tracking_no && <Row k="송장" v={`${r.carrier} ${r.tracking_no}`} />}
+        {r.truck_no && <Row k="화물차" v={r.truck_no} />}
+      </dl>
+      {error && <div className="mt-3"><Alert tone="error">{error}</Alert></div>}
+      {r.status === "접수" && (
+        <Button
+          block
+          size="md"
+          variant="ghost"
+          className="mt-3"
+          onClick={async () => {
+            if (!window.confirm(`주문 ${r.order_id}을(를) 취소할까요?`)) return;
+            try {
+              setR(await shopCancelOrder(r.order_id, { phone4 }));
+            } catch (e) {
+              setError(errorMessage(e));
+            }
+          }}
+        >
+          주문 취소
+        </Button>
+      )}
+      {!r.paid && r.status !== "취소" && s.info?.pay_client_key && (
+        <Link to={`${SP}/pay/${encodeURIComponent(r.order_id)}?p=${phone4}`} className="mt-3 block">
+          <Button block size="lg" icon={<CreditCard className="h-5 w-5" />}>카드·간편결제로 결제하기</Button>
+        </Link>
+      )}
+      {r.tracking_no && (
+        <a className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-parcel px-4 py-3 font-bold text-white" href={trackUrl(r.carrier, r.tracking_no)} target="_blank" rel="noreferrer">
+          <MapPin className="h-5 w-5" /> 배송 위치 보기
+        </a>
       )}
     </div>
   );

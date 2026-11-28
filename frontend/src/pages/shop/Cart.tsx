@@ -80,7 +80,6 @@ export default function Cart() {
     return store.get<Guest>(ME_KEY, { name: "", company: "", phone: "", address: { base: "", detail: "", zipcode: "" } });
   });
   const [remember, setRemember] = useState(true);
-  const [password, setPassword] = useState("");
   const [due, setDue] = useState("");
   const [note, setNote] = useState("");
   const [receipt, setReceipt] = useState<{ type: "" | "현금영수증" | "세금계산서"; id: string; email: string }>({ type: "", id: "", email: "" });
@@ -106,7 +105,7 @@ export default function Cart() {
   const [agree, setAgree] = useState(!!member);
   const [showPolicy, setShowPolicy] = useState(false);
   const [website, setWebsite] = useState(""); // 숨김 칸 (봇용)
-  const [errors, setErrors] = useState<Partial<Record<"items" | "name" | "phone" | "address" | "due" | "password" | "agree" | "receipt", string>>>({});
+  const [errors, setErrors] = useState<Partial<Record<"items" | "name" | "phone" | "address" | "due" | "agree" | "receipt", string>>>({});
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sendError, setSendError] = useState("");
@@ -123,13 +122,12 @@ export default function Cart() {
     if (address.length < 5) e.address = "받는 주소를 적어 주세요.";
     if (due && due < minDue) e.due = `담으신 품목은 ${dateKo(minDue)}부터 받을 수 있어요.`;
     else if (dueClosed) e.due = `${WEEK[weekdayOf(due)]}요일은 택배가 쉬어요. 다른 날을 골라 주세요.`;
-    if (!member && password && password.length < 4) e.password = "비밀번호는 4자리 이상으로 만들어 주세요.";
     if (!agree) e.agree = "개인정보 수집·이용에 동의해 주세요.";
     if (receipt.type === "현금영수증" && ![10, 11].includes(digits(receipt.id).length)) e.receipt = "현금영수증 받을 휴대폰 번호를 넣어 주세요.";
     if (receipt.type === "세금계산서" && (digits(receipt.id).length !== 10 || !receipt.email.includes("@")))
       e.receipt = "사업자등록번호 10자리와 이메일을 넣어 주세요.";
     setErrors(e);
-    const first = (["items", "name", "phone", "address", "due", "receipt", "password", "agree"] as const).find((k) => e[k]);
+    const first = (["items", "name", "phone", "address", "due", "receipt", "agree"] as const).find((k) => e[k]);
     if (first) document.getElementById(`f-${first}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     return !first;
   };
@@ -151,7 +149,7 @@ export default function Cart() {
           agree_privacy: agree,
           website,
           client_token: tokenRef.current,
-          password: member ? "" : password,
+          password: "", // 주문하면서 비밀번호로 가입하는 건 막았어요 (카카오·구글로만 가입)
           receipt_type: receipt.type,
           receipt_id: receipt.id.trim(),
           receipt_email: receipt.email.trim(),
@@ -325,13 +323,12 @@ export default function Cart() {
       {!member && (
         <>
           <SectionTitle>다음부터 편하게 (선택)</SectionTitle>
-          <div id="f-password" className="rounded-2xl bg-white p-4">
-            <Field
-              label="비밀번호 만들기"
-              hint={errors.password ? <span className="text-red-700">{errors.password}</span> : "적으면 주문과 함께 가입돼요. 다음부터 휴대폰 번호 + 비밀번호로 로그인 (4자리 이상)"}
-            >
-              <Input type="password" autoComplete="new-password" value={password} placeholder="비워 두면 비회원 주문" onChange={(e) => setPassword(e.target.value)} />
-            </Field>
+          <div className="rounded-2xl border border-line bg-white p-4">
+            {(shop.kakao_login || shop.google_login) && (
+              <p className="mb-3 break-keep text-[15px] text-stone-600">
+                <Link to={`${SP}/my`} className="font-bold text-brand underline">카카오·구글로 로그인</Link>하고 주문하면 다음부터 주소를 안 적어도 돼요.
+              </p>
+            )}
             <label className="flex items-center gap-2 text-stone-600">
               <input type="checkbox" className="h-5 w-5 accent-brand" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
               이 휴대폰에 받는 분 정보 기억하기
@@ -410,7 +407,6 @@ export default function Cart() {
           <Row k="주소" v={`${address}${who.address.zipcode ? ` [${who.address.zipcode}]` : ""}`} />
           <Row k="받는 날" v={due ? dateKo(due) : "가장 빠른 날"} />
           {note.trim() && <Row k="요청사항" v={note.trim()} />}
-          {!member && password && <Row k="가입" v="주문과 함께 가입해요" />}
         </dl>
         {subtotal !== null && <p className="mt-3 text-sm text-stone-500">{total !== null ? "입금 확인 후 보내 드려요." : `${ship.note}. 최종 금액은 문자로 알려 드려요.`}</p>}
         {sendError && <div className="mt-3"><Alert tone="error">{sendError}</Alert></div>}

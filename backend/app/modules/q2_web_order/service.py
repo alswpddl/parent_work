@@ -112,6 +112,8 @@ class ShopInfo(BaseModel):
     pay_client_key: str = ""  # 토스페이먼츠 클라이언트 키 (비면 온라인 결제 없음 — 계좌 입금만)
     pay_test_mode: bool = False  # 테스트 키면 True → 화면에 '테스트 결제' 표시
     kakao_login: bool = False  # 카카오로 시작하기 버튼 보이기
+    google_login: bool = False  # 구글로 시작하기 버튼 보이기
+    sms_verify: bool = False  # 비회원 조회를 이름+휴대폰+문자 인증번호로
 
 
 class GuestOrderIn(BaseModel):
@@ -342,6 +344,8 @@ class WebOrderService(ShopExtrasMixin):
             pay_client_key=self.ctx.config.toss_client_key if self.ctx.config.toss_enabled else "",
             pay_test_mode=self.ctx.config.toss_enabled and self.ctx.config.toss_test_mode,
             kakao_login=self.kakao_login_enabled,
+            google_login=self.google_login_enabled,
+            sms_verify=self.sms_verify_enabled,
             min_due_date=self._min_due(st),
             closed_weekdays=closed,
             closed_days_text=", ".join(WEEKDAYS_KO[i] for i in closed),
@@ -466,6 +470,8 @@ class WebOrderService(ShopExtrasMixin):
         self._validate(body, st)
         phone_d = digits(body.phone)
         member = self.member(token) if token else None
+        if not self.ctx.config.allow_password_signup:
+            body = body.model_copy(update={"password": ""})  # 주문하면서 비밀번호 가입도 닫음
         if body.password and not member and len(body.password) < 4:
             raise ValidationFailed("비밀번호는 4자리 이상으로 만들어 주세요.")
 
@@ -575,6 +581,8 @@ class WebOrderService(ShopExtrasMixin):
         return CustomerOut.from_row(row)
 
     def signup(self, body: SignupIn) -> AuthOut:
+        if not self.ctx.config.allow_password_signup:
+            raise ValidationFailed("휴대폰 번호 가입은 닫았어요. 카카오나 구글로 시작해 주세요.")
         if not body.agree_privacy:
             raise ValidationFailed("개인정보 수집·이용에 동의해 주셔야 가입할 수 있어요.")
         if not MOBILE_RE.match(digits(body.phone)):
