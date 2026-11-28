@@ -2,10 +2,10 @@
 import { useEffect, useState } from "react";
 import { BellOff, BellRing, Smartphone, X } from "lucide-react";
 import { errorMessage } from "../api/client";
-import { pushTest } from "../api/endpoints";
-import { disablePush, enablePush, pushState, type PushState } from "../lib/push";
+import { pushDevTest, pushTest } from "../api/endpoints";
+import { devAlerts, disablePush, enablePush, pushState, setDevAlerts, type PushState } from "../lib/push";
 import { useToast } from "./Toast";
-import { Alert, Button, Card } from "./ui";
+import { Alert, Button, Card, Toggle } from "./ui";
 
 const HIDE_KEY = "push.banner.hidden";
 
@@ -61,6 +61,7 @@ export function PushCard() {
               이 휴대폰 알림 끄기
             </Button>
           </div>
+          <DevAlerts />
         </>
       )}
       {state === "off" && (
@@ -98,6 +99,35 @@ export function PushCard() {
       )}
       {state === "unsupported" && <Alert tone="warn">이 브라우저는 알림을 받을 수 없어요. 휴대폰의 <b>크롬</b>이나 <b>삼성 인터넷</b>으로 열어 주세요.</Alert>}
     </Card>
+  );
+}
+
+/** 개발자용: 서버 오류가 나면 이 휴대폰에만 알림 (부모님 폰에는 안 감) */
+function DevAlerts() {
+  const toast = useToast();
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    void devAlerts().then(setOn).catch(() => setOn(false));
+  }, []);
+  if (on === null) return null;
+  return (
+    <div className="mt-4 border-t border-line pt-4">
+      <Toggle
+        checked={on}
+        label={<span>서버 오류 알림도 받기 <span className="text-sm font-normal text-stone-500">(개발자용 · 이 휴대폰에만)</span></span>}
+        onChange={async (x) => {
+          try {
+            setOn(await setDevAlerts(x));
+            if (x) {
+              const r = await pushDevTest();
+              toast(r.sent ? "켰어요. 시험 알림을 보냈어요." : "켰어요.");
+            }
+          } catch (e) {
+            toast(errorMessage(e), "error");
+          }
+        }}
+      />
+    </div>
   );
 }
 

@@ -106,11 +106,15 @@ class WebPushClient:
     def _sub_key(endpoint: str) -> str:
         return SUB_PREFIX + hashlib.sha256(endpoint.encode()).hexdigest()[:20]
 
-    def subscribe(self, endpoint: str, p256dh: str, auth: str, label: str = "") -> None:
+    def subscribe(self, endpoint: str, p256dh: str, auth: str, label: str = "", dev: bool | None = None) -> None:
         if not endpoint.startswith("https://"):
             raise ValueError("알림 주소가 올바르지 않아요.")
         unb64u(p256dh), unb64u(auth)  # 형식 확인
-        value = json.dumps({"endpoint": endpoint, "p256dh": p256dh, "auth": auth, "label": label[:40]}, ensure_ascii=False)
+        old = next((s for s in self.subscriptions() if s.get("endpoint") == endpoint), {})
+        if dev is None:  # 다시 구독해도 '개발자 알림' 설정과 이름은 그대로
+            dev = bool(old.get("dev"))
+        label = label or str(old.get("label") or "")
+        value = json.dumps({"endpoint": endpoint, "p256dh": p256dh, "auth": auth, "label": label[:40], "dev": bool(dev)}, ensure_ascii=False)
         self.tokens.set_many({self._sub_key(endpoint): (value, None)})
 
     def unsubscribe(self, endpoint: str) -> None:
@@ -127,6 +131,14 @@ class WebPushClient:
                 except json.JSONDecodeError:
                     continue
         return out
+
+    def set_dev(self, endpoint: str, dev: bool) -> bool:
+        """이 휴대폰에 서버 오류 알림(개발자용)도 보낼지. 구독이 없으면 False"""
+        sub = next((s for s in self.subscriptions() if s.get("endpoint") == endpoint), None)
+        if sub is None:
+            return False
+        self.subscribe(endpoint, sub["p256dh"], sub["auth"], label=sub.get("label", ""), dev=dev)
+        return True
 
     def has(self, endpoint: str) -> bool:
         return any(s.get("endpoint") == endpoint for s in self.subscriptions())
@@ -155,11 +167,13 @@ class WebPushClient:
         )
         return r.status
 
-    def send_all(self, title: str, body: str, url: str = "/", tag: str = "") -> PushResult:
+    def send_all(self, title: str, body: str, url: str = "/", tag: str = "", dev_only: bool = False) -> PushResult:
         res = PushResult()
         message = {"title": title, "body": body[:400], "url": url, "tag": tag or title}
         gone: list[str] = []
         for sub in self.subscriptions():
+            if dev_only and not sub.get("dev"):
+                continue
             try:
                 status = self.send_one(sub, message)
             except Exception:  # noqa: BLE001 — 한 대가 실패해도 나머지는 보낸다

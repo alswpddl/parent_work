@@ -144,11 +144,14 @@ export interface PushStatusOut {
   public_key: string;
   devices: number;
   subscribed: boolean;
+  dev?: boolean; // 서버 오류 알림(개발자용)도 받는지
 }
 export const pushStatus = (endpoint: string) => api<PushStatusOut>("/api/push/status", { method: "POST", body: { endpoint } });
 export const pushSubscribe = (body: { endpoint: string; keys: { p256dh: string; auth: string }; label: string }) =>
   api<PushStatusOut>("/api/push/subscribe", { method: "POST", body });
 export const pushUnsubscribe = (endpoint: string) => api<PushStatusOut>("/api/push/unsubscribe", { method: "POST", body: { endpoint } });
+export const pushSetDev = (endpoint: string, dev: boolean) => api<PushStatusOut>("/api/push/dev", { method: "POST", body: { endpoint, dev } });
+export const pushDevTest = () => api<{ sent: number }>("/api/push/dev-test", { method: "POST" });
 export const pushTest = () => api<{ sent: number; failed: number; removed: number }>("/api/push/test", { method: "POST" });
 export const listMessages = (orderId?: string, limit = 100) => api<MessageLog[]>("/api/messages", { query: { order_id: orderId, limit } });
 

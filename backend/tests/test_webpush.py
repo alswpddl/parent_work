@@ -104,3 +104,28 @@ def test_subscriptions_live_in_token_tab(full_ctx):
     full_ctx.push.public_key()  # 처음 쓸 때 만들어져 저장
     keys = [r["key"] for r in full_ctx.tokens.rows(fresh=True)]
     assert any(k.startswith(SUB_PREFIX) for k in keys) and "push:vapid" in keys
+
+
+def test_dev_only_alerts_go_to_dev_phones(full_ctx, http):
+    from app.services import dev_alert as da
+
+    da._last.clear()
+    parent, me = Phone("https://fcm.googleapis.com/fcm/send/PARENT"), Phone("https://fcm.googleapis.com/fcm/send/MINJE")
+    p = full_ctx.push
+    p.subscribe(parent.endpoint, label="아버지 폰", **parent.keys)
+    p.subscribe(me.endpoint, label="민제 폰", **me.keys)
+    assert p.set_dev(me.endpoint, True) and not p.set_dev("https://nope.example/x", True)
+    p.subscribe(me.endpoint, **me.keys)  # 다시 구독해도 개발자 설정 유지
+    assert [s["label"] for s in p.subscriptions() if s.get("dev")] == ["민제 폰"]
+
+    http.queue("MINJE", 201, {})
+    assert da.dev_alert(full_ctx, "서버 오류", "GET /api/x\nKeyError", key="k1", wait=True)
+    sent = http.by("fcm.googleapis.com")
+    assert len(sent) == 1 and "MINJE" in sent[0]["url"]
+    assert me.decrypt(sent[0]["data"])["title"] == "서버 오류"
+    # 같은 오류는 10분에 한 번
+    assert not da.dev_alert(full_ctx, "서버 오류", "또", key="k1", wait=True)
+    # 일반 알림(아침 브리핑)은 두 폰 모두
+    http.queue("PARENT", 201, {})
+    http.queue("MINJE", 201, {})
+    assert p.send_all("아침 브리핑", "택배 1건").sent == 2
