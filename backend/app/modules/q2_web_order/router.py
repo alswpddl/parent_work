@@ -171,6 +171,29 @@ def kakao_callback(code: str = "", state: str = "", error: str = "", ctx: AppCon
     return RedirectResponse(f"{web}#kn={quote(r.ticket)}&nick={quote(r.nickname)}", status_code=302)
 
 
+@router.get("/auth/google/start", include_in_schema=False)
+def google_start(ctx: AppContext = Depends(get_ctx)) -> RedirectResponse:
+    try:
+        return RedirectResponse(ctx.services["web_order"].google_start_url(), status_code=302)
+    except AppError as e:
+        return RedirectResponse(f"{_my(ctx)}#kerr={quote(str(e))}&p=google", status_code=302)
+
+
+@router.get("/auth/google/callback", include_in_schema=False)
+def google_callback(code: str = "", state: str = "", error: str = "", ctx: AppContext = Depends(get_ctx)) -> RedirectResponse:
+    """구글이 돌려보내는 곳 → 카카오와 같은 방식으로 마이페이지로 (끝에 &p=google)"""
+    web = _my(ctx)
+    if error or not code:
+        return RedirectResponse(f"{web}#kerr={quote('구글 로그인을 취소했어요.')}&p=google", status_code=302)
+    try:
+        r = ctx.services["web_order"].google_callback(code, state)
+    except AppError as e:
+        return RedirectResponse(f"{web}#kerr={quote(str(e))}&p=google", status_code=302)
+    if r.token:
+        return RedirectResponse(f"{web}#kt={quote(r.token)}&p=google", status_code=302)
+    return RedirectResponse(f"{web}#kn={quote(r.ticket)}&nick={quote(r.nickname)}&p=google", status_code=302)
+
+
 @router.post("/auth/kakao/complete", response_model=AuthOut, status_code=201)
 def kakao_complete(body: KakaoCompleteIn, ctx: AppContext = Depends(get_ctx)) -> AuthOut:
     return ctx.services["web_order"].kakao_complete(body)

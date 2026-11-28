@@ -90,6 +90,9 @@ class AppConfig(BaseModel):
     # --- 카카오 '나에게 보내기' (부모님 브리핑·경고) ---
     kakao_rest_api_key: str = ""
     kakao_client_secret: str = ""
+    google_client_id: str = ""  # 손님 구글 로그인 (구글 클라우드 콘솔 → OAuth 클라이언트 ID)
+    google_client_secret: str = ""
+    allow_password_signup: bool = False  # 휴대폰 번호+비밀번호 새 가입 (본인 확인이 없어 기본은 닫음, 기존 회원 로그인은 됨)
     kakao_redirect_uri: str = ""  # 비우면 {public_api_url}/api/integrations/kakao/callback
 
     # --- 솔라피 알림톡 (거래처 안내) ---
@@ -216,6 +219,9 @@ class AppConfig(BaseModel):
             claude_timeout=float(g("CLAUDE_TIMEOUT", "30")),
             kakao_rest_api_key=g("KAKAO_REST_API_KEY", ""),
             kakao_client_secret=g("KAKAO_CLIENT_SECRET", ""),
+            google_client_id=g("GOOGLE_CLIENT_ID", ""),
+            google_client_secret=g("GOOGLE_CLIENT_SECRET", ""),
+            allow_password_signup=_bool(g("ALLOW_PASSWORD_SIGNUP"), False),
             kakao_redirect_uri=g("KAKAO_REDIRECT_URI", ""),
             toss_client_key=g("TOSS_CLIENT_KEY", "").strip(),
             toss_secret_key=g("TOSS_SECRET_KEY", "").strip(),

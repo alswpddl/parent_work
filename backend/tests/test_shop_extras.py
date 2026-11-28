@@ -110,3 +110,46 @@ def test_kakao_login_new_and_link(full_ctx, http):
     assert linked.token
     http.queue("/v2/user/me", 200, {"id": 222})
     assert s.kakao_callback("code4", state).token
+
+
+def test_google_login_new_then_direct(full_ctx, http):
+    s = _svc(full_ctx)
+    with pytest.raises(ValidationFailed, match="구글"):
+        s.google_start_url()  # 키 없으면 꺼짐
+    full_ctx.config.google_client_id = "gid.apps.googleusercontent.com"
+    full_ctx.config.google_client_secret = "gsecret"
+    url = s.google_start_url()
+    assert url.startswith("https://accounts.google.com/o/oauth2/v2/auth?") and "scope=openid+email+profile" in url
+    assert "api.example.com%2Fapi%2Fpublic%2Fshop%2Fauth%2Fgoogle%2Fcallback" in url
+    state = url.split("state=")[1].split("&")[0]
+    with pytest.raises(UnauthorizedError):
+        s.google_callback("c", s.kakao_start_url().split("state=")[1])  # 카카오 표로는 안 됨
+
+    http.queue("oauth2.googleapis.com/token", 200, {"access_token": "g-acc", "id_token": "x"})
+    http.queue("openidconnect.googleapis.com", 200, {"sub": "g-123", "name": "Minje Choi", "email": "m@example.com"})
+    r = s.google_callback("code1", state)
+    assert r.ticket and not r.token and r.nickname == "Minje Choi"
+    tok = http.by("oauth2.googleapis.com/token")[0]["form"]
+    assert tok["client_secret"] == "gsecret" and tok["code"] == "code1"
+
+    auth = s.kakao_complete(KakaoCompleteIn(ticket=r.ticket, name="최민제", phone="010-7777-3333", agree_privacy=True))
+    row = full_ctx.customers.get(s.member(auth.token).customer_id, fresh=True)
+    assert row["google_id"] == "g-123" and not row.get("kakao_id")
+
+    http.queue("oauth2.googleapis.com/token", 200, {"access_token": "g-acc2"})
+    http.queue("openidconnect.googleapis.com", 200, {"sub": "g-123"})
+    assert s.google_callback("code2", state).token  # 다음부터는 바로 로그인
+
+    http.queue("oauth2.googleapis.com/token", 400, {"error": "invalid_grant"})
+    with pytest.raises(ValidationFailed, match="구글 로그인에 실패"):
+        s.google_callback("bad", state)
+
+
+def test_password_signup_closed_by_default(full_ctx):
+    s = _svc(full_ctx)
+    full_ctx.config.allow_password_signup = False
+    with pytest.raises(ValidationFailed, match="카카오나 구글"):
+        s.signup(SignupIn(name="아무개", phone="010-1111-2222", password="1234", agree_privacy=True))
+    # 주문하면서 비밀번호를 보내도 가입은 안 되고 주문만 들어감
+    done = s.place(_body(password="1234", client_token="pw-off"))
+    assert done.order_id and not done.token

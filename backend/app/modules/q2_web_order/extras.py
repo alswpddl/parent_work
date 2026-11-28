@@ -36,6 +36,10 @@ from .accounts import check_password, issue_token
 
 KAUTH = "https://kauth.kakao.com"
 KAPI = "https://kapi.kakao.com"
+GAUTH = "https://accounts.google.com/o/oauth2/v2/auth"
+GTOKEN = "https://oauth2.googleapis.com/token"
+GUSER = "https://openidconnect.googleapis.com/v1/userinfo"
+PROVIDER_KO = {"kakao": "카카오", "google": "구글"}
 
 
 def mask_name(name: str) -> str:
@@ -305,36 +309,86 @@ class ShopExtrasMixin:
         nick = str((props or {}).get("nickname") or "")
         return str(info["id"]), nick
 
-    def _row_by_kakao(self, kid: str) -> dict | None:
+    def _row_by_social(self, provider: str, uid: str) -> dict | None:
+        col = f"{provider}_id"
         for d in self.ctx.customers.rows(fresh=True):
-            if d.get("customer_id") and str(d.get("kakao_id") or "") == kid and d.get("active") is not False:
+            if d.get("customer_id") and str(d.get(col) or "") == uid and d.get("active") is not False:
                 return d
         return None
+
+    def _row_by_kakao(self, kid: str) -> dict | None:
+        return self._row_by_social("kakao", kid)
+
+    def _social_result(self, provider: str, uid: str, nick: str) -> KakaoResult:
+        """이미 연결된 손님 → 바로 로그인 표, 처음 → 이름·번호를 받는 30분짜리 가입 표"""
+        row = self._row_by_social(provider, uid)
+        if row is not None and row.get("web_password"):
+            return KakaoResult(token=issue_token(self._key, row["customer_id"], row["web_password"]), nickname=nick)
+        nick_b64 = base64.urlsafe_b64encode(nick.encode()).decode()[:80]
+        return KakaoResult(ticket=sign(self._key, f"{provider}:{uid}:{nick_b64}", 1800), nickname=nick)
 
     def kakao_callback(self, code: str, state: str) -> KakaoResult:
         if not (verify(self._key, state or "") or "").startswith("klogin:"):
             raise UnauthorizedError("로그인 시간이 지났어요. 다시 시도해 주세요.")
         kid, nick = self._kakao_user(code)
-        row = self._row_by_kakao(kid)
-        if row is not None and row.get("web_password"):
-            return KakaoResult(token=issue_token(self._key, row["customer_id"], row["web_password"]), nickname=nick)
-        nick_b64 = base64.urlsafe_b64encode(nick.encode()).decode()[:80]
-        return KakaoResult(ticket=sign(self._key, f"kakao:{kid}:{nick_b64}", 1800), nickname=nick)
+        return self._social_result("kakao", kid, nick)
+
+    # ================================================================ 구글 로그인
+    @property
+    def google_login_enabled(self) -> bool:
+        cfg = self.ctx.config
+        return bool(getattr(cfg, "google_client_id", "") and getattr(cfg, "google_client_secret", ""))
+
+    @property
+    def google_redirect(self) -> str:
+        return f"{self.ctx.config.public_api_url.rstrip('/')}/api/public/shop/auth/google/callback"
+
+    def google_start_url(self) -> str:
+        if not self.google_login_enabled:
+            raise ValidationFailed("구글 로그인이 아직 꺼져 있어요.")
+        state = sign(self._key, f"glogin:{secrets.token_hex(8)}", 600)
+        q = {"client_id": self.ctx.config.google_client_id, "redirect_uri": self.google_redirect, "response_type": "code",
+             "scope": "openid email profile", "state": state, "prompt": "select_account"}
+        return f"{GAUTH}?{urlencode(q)}"
+
+    def _google_user(self, code: str) -> tuple[str, str]:
+        from .service import _http_of
+
+        http = _http_of(self.ctx)
+        cfg = self.ctx.config
+        r = http("POST", GTOKEN, form={"grant_type": "authorization_code", "code": code, "client_id": cfg.google_client_id,
+                                       "client_secret": cfg.google_client_secret, "redirect_uri": self.google_redirect}, timeout=10)
+        data = r.json() if r.body else {}
+        if not r.ok or not isinstance(data, dict) or not data.get("access_token"):
+            raise ValidationFailed("구글 로그인에 실패했어요. 다시 시도해 주세요.")
+        me = http("GET", GUSER, headers={"Authorization": f"Bearer {data['access_token']}"}, timeout=10)
+        info = me.json() if me.body else {}
+        if not me.ok or not isinstance(info, dict) or not info.get("sub"):
+            raise ValidationFailed("구글 회원 정보를 받지 못했어요.")
+        return str(info["sub"]), str(info.get("name") or "")
+
+    def google_callback(self, code: str, state: str) -> KakaoResult:
+        if not (verify(self._key, state or "") or "").startswith("glogin:"):
+            raise UnauthorizedError("로그인 시간이 지났어요. 다시 시도해 주세요.")
+        sub, name = self._google_user(code)
+        return self._social_result("google", sub, name)
 
     def kakao_complete(self, body: KakaoCompleteIn) -> Any:
-        """처음 카카오로 온 손님: 이름·번호로 가입하거나 기존 계정에 연결"""
+        """처음 카카오·구글로 온 손님: 이름·번호로 가입하거나 기존 계정에 연결"""
         from .service import MOBILE_RE, AuthOut, GuestOrderIn, _attachable, _profile, digits, pretty_phone
 
         payload = verify(self._key, body.ticket) or ""
-        if not payload.startswith("kakao:"):
-            raise UnauthorizedError("시간이 지났어요. 카카오로 다시 시작해 주세요.")
+        provider = payload.split(":", 1)[0]
+        if provider not in PROVIDER_KO:
+            raise UnauthorizedError("시간이 지났어요. 처음부터 다시 시작해 주세요.")
         kid = payload.split(":")[1]
+        col, ko = f"{provider}_id", PROVIDER_KO[provider]
         if not body.agree_privacy:
             raise ValidationFailed("개인정보 수집·이용에 동의해 주셔야 가입할 수 있어요.")
         if not MOBILE_RE.match(digits(body.phone)):
             raise ValidationFailed("휴대폰 번호를 확인해 주세요 (예: 010-1234-5678).")
-        if self._row_by_kakao(kid):
-            raise ValidationFailed("이미 연결된 카카오 계정이에요. 카카오로 다시 로그인해 주세요.")
+        if self._row_by_social(provider, kid):
+            raise ValidationFailed(f"이미 연결된 {ko} 계정이에요. {ko}로 다시 로그인해 주세요.")
         phone = pretty_phone(body.phone)
         rows = self._rows_by_phone(phone)  # type: ignore[attr-defined]
         with_pw = [r for r in rows if r.get("web_password")]
@@ -342,17 +396,17 @@ class ShopExtrasMixin:
             # 같은 번호로 가입한 계정 → 그 비밀번호를 알아야 연결 (남의 계정 가로채기 방지)
             hit = next((r for r in with_pw if check_password(body.password, r.get("web_password") or "")), None)
             if hit is None:
-                raise ValidationFailed("이 번호로 가입한 계정이 있어요. 그 계정 비밀번호를 넣으면 카카오와 연결돼요.")
-            self.ctx.customers.update((hit["customer_id"],), {"kakao_id": kid})
-            self.ctx.logs.write("카카오 연결", hit["customer_id"], hit.get("name", ""), actor="웹주문서")
+                raise ValidationFailed(f"이 번호로 가입한 계정이 있어요. 그 계정 비밀번호를 넣으면 {ko}와 연결돼요.")
+            self.ctx.customers.update((hit["customer_id"],), {col: kid})
+            self.ctx.logs.write(f"{ko} 연결", hit["customer_id"], hit.get("name", ""), actor="웹주문서")
             c = CustomerOut.from_row(self.ctx.customers.get(hit["customer_id"], fresh=True) or {})
             return AuthOut(token=issue_token(self._key, c.customer_id, hit["web_password"]), profile=_profile(c))
         probe = GuestOrderIn.model_construct(name=body.name, company=body.company, phone=phone, address="", zipcode="")
         same = [CustomerOut.from_row(r) for r in rows]
         found = next((x for x in same if _attachable(x) and self._same_person(x, probe)), None)  # type: ignore[attr-defined]
         c = found or self._new_customer(probe, phone, same)  # type: ignore[attr-defined]
-        marker = f"kakao:{secrets.token_hex(12)}"
-        self.ctx.customers.update((c.customer_id,), {"kakao_id": kid, "web_password": marker, "privacy_agreed_at": now()})
-        self.ctx.logs.write("카카오 가입", c.customer_id, c.name, actor="웹주문서")
+        marker = f"{provider}:{secrets.token_hex(12)}"
+        self.ctx.customers.update((c.customer_id,), {col: kid, "web_password": marker, "privacy_agreed_at": now()})
+        self.ctx.logs.write(f"{ko} 가입", c.customer_id, c.name, actor="웹주문서")
         fresh = CustomerOut.from_row(self.ctx.customers.get(c.customer_id, fresh=True) or {})
         return AuthOut(token=issue_token(self._key, c.customer_id, marker), profile=_profile(fresh))

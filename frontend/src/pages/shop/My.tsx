@@ -10,7 +10,6 @@ import {
   shopLogin,
   shopMe,
   shopMyOrders,
-  shopSignup,
   shopUpdateMe,
   shopWriteReview,
 } from "../../api/endpoints";
@@ -25,13 +24,15 @@ import { SHOP_HOME, SP } from "../../lib/host";
 export default function My() {
   const s = useShop();
   const kakao = useKakaoReturn();
-  if (kakao.ticket) return <KakaoComplete ticket={kakao.ticket} nickname={kakao.nickname} onCancel={kakao.clear} />;
+  if (kakao.ticket) return <KakaoComplete ticket={kakao.ticket} nickname={kakao.nickname} provider={kakao.provider} onCancel={kakao.clear} />;
   if (!s.auth) return <Auth kakaoError={kakao.error} />;
   return <MyPage />;
 }
 
-// ================================================================ 카카오 로그인에서 돌아왔을 때
-// 서버가 /shop/my#kt=토큰 (바로 로그인) · #kn=표 (처음 → 이름·번호 입력) · #kerr=이유 로 보내 준다
+// ================================================================ 카카오·구글 로그인에서 돌아왔을 때
+// 서버가 /my#kt=토큰 (바로 로그인) · #kn=표 (처음 → 이름·번호 입력) · #kerr=이유 로 보내 준다. 구글이면 끝에 &p=google
+type Provider = "kakao" | "google";
+const PROVIDER_KO: Record<Provider, string> = { kakao: "카카오", google: "구글" };
 function useKakaoReturn() {
   const s = useShop();
   const toast = useToast();
@@ -39,6 +40,7 @@ function useKakaoReturn() {
   const [ticket, setTicket] = useState(state.get("kn") || "");
   const nickname = state.get("nick") || "";
   const error = state.get("kerr") || "";
+  const provider: Provider = state.get("p") === "google" ? "google" : "kakao";
   useEffect(() => {
     if (window.location.hash) window.history.replaceState(null, "", window.location.pathname + window.location.search);
     const token = state.get("kt");
@@ -46,32 +48,52 @@ function useKakaoReturn() {
       shopMe(token)
         .then((profile) => {
           s.signIn({ token, profile });
-          toast("카카오로 로그인했어요.");
+          toast(`${PROVIDER_KO[provider]}로 로그인했어요.`);
         })
         .catch((e) => toast(errorMessage(e), "error"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return { ticket, nickname, error, clear: () => setTicket("") };
+  return { ticket, nickname, error, provider, clear: () => setTicket("") };
 }
 
-function KakaoButton() {
+/** 카카오·구글 로그인 버튼 — 각 회사가 정한 모양(카카오 노란색, 구글 흰 바탕 + G 표시) */
+function SocialButtons() {
   const s = useShop();
-  if (!s.info?.kakao_login) return null;
+  if (!s.info?.kakao_login && !s.info?.google_login) return null;
   return (
-    <a
-      href={apiUrl("/api/public/shop/auth/kakao/start")}
-      className="mb-5 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FEE500] text-lg font-bold text-[#191600]"
-    >
-      <svg aria-hidden viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-        <path d="M12 3C6.48 3 2 6.58 2 11c0 2.84 1.86 5.33 4.66 6.75l-.95 3.5a.4.4 0 0 0 .6.44l4.1-2.72c.52.06 1.05.1 1.59.1 5.52 0 10-3.58 10-8.07S17.52 3 12 3Z" />
-      </svg>
-      카카오로 시작하기
-    </a>
+    <div className="space-y-2.5">
+      {s.info?.kakao_login && (
+        <a
+          href={apiUrl("/api/public/shop/auth/kakao/start")}
+          className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FEE500] text-[17px] font-semibold text-black/85"
+        >
+          <svg aria-hidden viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
+            <path d="M12 3C6.48 3 2 6.58 2 11c0 2.84 1.86 5.33 4.66 6.75l-.95 3.5a.4.4 0 0 0 .6.44l4.1-2.72c.52.06 1.05.1 1.59.1 5.52 0 10-3.58 10-8.07S17.52 3 12 3Z" />
+          </svg>
+          카카오로 시작하기
+        </a>
+      )}
+      {s.info?.google_login && (
+        <a
+          href={apiUrl("/api/public/shop/auth/google/start")}
+          className="flex h-14 w-full items-center justify-center gap-2.5 rounded-xl border border-[#747775] bg-white text-[17px] font-semibold text-[#1f1f1f]"
+        >
+          <svg aria-hidden viewBox="0 0 48 48" className="h-5 w-5">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+          </svg>
+          구글로 시작하기
+        </a>
+      )}
+    </div>
   );
 }
 
-function KakaoComplete({ ticket, nickname, onCancel }: { ticket: string; nickname: string; onCancel: () => void }) {
+function KakaoComplete({ ticket, nickname, provider, onCancel }: { ticket: string; nickname: string; provider: Provider; onCancel: () => void }) {
+  const ko = PROVIDER_KO[provider];
   const s = useShop();
   const nav = useNavigate();
   const [v, setV] = useState({ name: nickname, phone: "", company: "", password: "" });
@@ -99,8 +121,8 @@ function KakaoComplete({ ticket, nickname, onCancel }: { ticket: string; nicknam
   };
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-extrabold">카카오로 가입</h1>
-      <p className="mb-4 break-keep text-stone-600">처음 한 번만 성함과 휴대폰 번호를 적어 주세요. 다음부터는 카카오 버튼 하나로 들어와요.</p>
+      <h1 className="mb-1 text-2xl font-extrabold">{ko}로 가입</h1>
+      <p className="mb-4 break-keep text-stone-600">처음 한 번만 받는 분 성함과 휴대폰 번호를 적어 주세요. 다음부터는 {ko} 버튼 하나로 들어와요.</p>
       {err && <Alert tone="error">{err}</Alert>}
       <Field label="성함">
         <Input value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />
@@ -112,7 +134,7 @@ function KakaoComplete({ ticket, nickname, onCancel }: { ticket: string; nicknam
         <Input value={v.company} onChange={(e) => setV({ ...v, company: e.target.value })} />
       </Field>
       {needPw && (
-        <Field label="이 번호로 가입할 때 정한 비밀번호" hint="맞으면 원래 계정에 카카오가 연결돼요">
+        <Field label="이 번호로 가입할 때 정한 비밀번호" hint={`맞으면 원래 계정에 ${ko}가 연결돼요`}>
           <Input type="password" value={v.password} onChange={(e) => setV({ ...v, password: e.target.value })} />
         </Field>
       )}
@@ -130,30 +152,33 @@ function KakaoComplete({ ticket, nickname, onCancel }: { ticket: string; nicknam
 }
 
 // ================================================================ 로그인 · 가입
+// 가입·로그인은 카카오·구글로만 (본인 확인은 카카오·구글이 해 줘요).
+// 예전에 휴대폰 번호 + 비밀번호로 가입한 손님만 아래 접힌 칸에서 로그인할 수 있어요. 새로 만드는 건 막았어요.
 function Auth({ kakaoError }: { kakaoError: string }) {
   const s = useShop();
   const nav = useNavigate();
-  const [tab, setTab] = useState<"login" | "signup">("login");
+  const social = !!(s.info?.kakao_login || s.info?.google_login);
   return (
     <div>
-      <h1 className="mb-1 text-2xl font-extrabold">{tab === "login" ? "로그인" : "처음이에요 (가입)"}</h1>
-      <p className="mb-4 text-stone-600">가입하면 주소를 다시 안 적어도 되고, 지난 주문을 한 번에 다시 할 수 있어요.</p>
+      <h1 className="mb-1 text-2xl font-extrabold">로그인</h1>
+      <p className="mb-5 break-keep text-stone-600">로그인하면 주소를 다시 안 적어도 되고, 지난 주문을 한 번에 다시 할 수 있어요.</p>
       {kakaoError && <Alert tone="error">{kakaoError}</Alert>}
-      <KakaoButton />
-      {s.info?.kakao_login && <p className="mb-3 text-center text-sm text-stone-500">또는 휴대폰 번호와 비밀번호로</p>}
-      <Segmented
-        className="mb-5"
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: "login", label: "로그인" },
-          { value: "signup", label: "처음이에요" },
-        ]}
-      />
-      {tab === "login" ? <LoginForm onDone={() => nav(`${SP}/my`)} /> : <SignupForm onDone={() => nav(`${SP}/my`)} privacy={s.info?.privacy_text ?? ""} />}
+      {social ? (
+        <SocialButtons />
+      ) : (
+        <Alert tone="info">지금은 로그인 없이도 주문할 수 있어요. 주문하면 주문번호로 조회할 수 있어요.</Alert>
+      )}
+      <details className="group mt-6 rounded-xl border border-line bg-white">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-[15px] font-semibold text-stone-600">
+          예전에 휴대폰 번호로 가입하셨나요?
+          <ChevronDown className="h-5 w-5 text-stone-400 transition group-open:rotate-180" />
+        </summary>
+        <div className="border-t border-line px-4 pb-4 pt-3">
+          <LoginForm onDone={() => nav(`${SP}/my`)} />
+        </div>
+      </details>
       <p className="mt-6 text-center text-sm text-stone-500">
         가입 없이 주문했다면 <Link to={`${SP}/lookup`} className="font-bold text-brand underline">주문번호로 조회</Link>
-        {s.info?.factory_phone && <> · 비밀번호를 잊었으면 {s.info.factory_phone}로 전화 주세요</>}
       </p>
     </div>
   );
@@ -193,65 +218,6 @@ function LoginForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function SignupForm({ onDone, privacy }: { onDone: () => void; privacy: string }) {
-  const s = useShop();
-  const [v, setV] = useState({ name: "", company: "", phone: "", pw: "", pw2: "" });
-  const [addr, setAddr] = useState<Address>({ base: "", detail: "", zipcode: "" });
-  const [agree, setAgree] = useState(false);
-  const [showPolicy, setShowPolicy] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-  const set = (p: Partial<typeof v>) => setV({ ...v, ...p });
-  const go = async () => {
-    setErr("");
-    if (!v.name.trim()) return setErr("성함을 적어 주세요.");
-    if (!MOBILE_RE.test(digits(v.phone))) return setErr("휴대폰 번호를 확인해 주세요.");
-    if (v.pw.length < 4) return setErr("비밀번호는 4자리 이상으로 만들어 주세요.");
-    if (v.pw !== v.pw2) return setErr("비밀번호 확인이 달라요.");
-    if (!agree) return setErr("개인정보 수집·이용에 동의해 주세요.");
-    setBusy(true);
-    try {
-      s.signIn(await shopSignup({
-        name: v.name.trim(), company: v.company.trim(), phone: formatPhone(v.phone), password: v.pw,
-        address: joinAddress(addr), zipcode: addr.zipcode, agree_privacy: true,
-      }));
-      onDone();
-    } catch (e) {
-      setErr(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <form onSubmit={(e: { preventDefault: () => void }) => { e.preventDefault(); void go(); }}>
-      <Field label="성함 *"><Input autoComplete="name" value={v.name} onChange={(e) => set({ name: e.target.value })} /></Field>
-      <Field label="상호 (가게·식당이면)" hint="개인이시면 비워 두세요"><Input value={v.company} onChange={(e) => set({ company: e.target.value })} /></Field>
-      <Field label="휴대폰 번호 *" hint="로그인할 때 아이디로 써요">
-        <Input type="tel" inputMode="numeric" autoComplete="tel" value={v.phone} placeholder="010-1234-5678" onChange={(e) => set({ phone: formatPhone(e.target.value) })} />
-      </Field>
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="비밀번호 *" hint="4자리 이상"><Input type="password" autoComplete="new-password" value={v.pw} onChange={(e) => set({ pw: e.target.value })} /></Field>
-        <Field label="비밀번호 확인 *"><Input type="password" autoComplete="new-password" value={v.pw2} onChange={(e) => set({ pw2: e.target.value })} /></Field>
-      </div>
-      <p className="mb-1 text-sm font-semibold text-stone-500">받는 주소 (나중에 적어도 돼요)</p>
-      <AddressField value={addr} onChange={setAddr} />
-      <div className="mb-4 rounded-2xl border border-line bg-white p-4">
-        <label className="flex items-start gap-3">
-          <input type="checkbox" className="mt-0.5 h-6 w-6 shrink-0 accent-brand" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
-          <span className="font-bold">주문·배송을 위한 개인정보 수집·이용에 동의해요 (필수)</span>
-        </label>
-        <button type="button" className="mt-2 flex items-center gap-1 text-sm font-semibold text-stone-500" onClick={() => setShowPolicy(!showPolicy)}>
-          내용 보기 <ChevronDown className={cx("h-4 w-4 transition", showPolicy && "rotate-180")} />
-        </button>
-        {showPolicy && <p className="mt-2 whitespace-pre-line rounded-xl bg-paper p-3 text-sm text-stone-600">{privacy}</p>}
-      </div>
-      {err && <Alert tone="error">{err}</Alert>}
-      <Button size="xl" block loading={busy} type="submit">가입하고 시작하기</Button>
-    </form>
-  );
-}
-
-// ================================================================ 마이페이지
 function MyPage() {
   const s = useShop();
   const nav = useNavigate();
