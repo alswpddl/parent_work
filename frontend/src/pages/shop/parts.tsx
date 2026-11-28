@@ -1,9 +1,9 @@
 // 웹 주문서 화면 조각들
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Search, Share2 } from "lucide-react";
-import { errorMessage } from "../../api/client";
+import { ArrowUp, Search, Share2 } from "lucide-react";
 import { shopReviews } from "../../api/endpoints";
-import type { ShopReviewList } from "../../api/types";
+import type { ShopInfo, ShopReview, ShopReviewList } from "../../api/types";
+import { dateKo } from "../../lib/format";
 import { Button, CopyButton, Field, Input, Modal, cx } from "../../components/ui";
 import { formatAddress, loadPostcode } from "../../lib/postcode";
 
@@ -227,46 +227,103 @@ export function StarPicker({ value, onChange }: { value: number; onChange: (v: n
   );
 }
 
-export function ReviewsSection({ name }: { name: string }) {
-  const [data, setData] = useState<ShopReviewList | null>(null);
-  const [error, setError] = useState("");
+type ReviewSort = "new" | "high" | "low";
+const SORTS: { value: ReviewSort; label: string }[] = [
+  { value: "new", label: "최신순" },
+  { value: "high", label: "별점 높은순" },
+  { value: "low", label: "별점 낮은순" },
+];
+
+/** 구매 후기: 평균 · 별점 막대 · 정렬 · 5개씩 더보기 (큰 쇼핑몰 후기 칸과 같은 짜임) */
+export function ReviewsSection({ name, data }: { name: string; data?: ShopReviewList | null }) {
+  const [own, setOwn] = useState<ShopReviewList | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [sort, setSort] = useState<ReviewSort>("new");
+  const [shown, setShown] = useState(5);
   useEffect(() => {
-    shopReviews(name)
-      .then(setData)
-      .catch((e) => setError(errorMessage(e)));
-  }, [name]);
-  if (error) return null;
-  if (!data) return null;
+    if (data !== undefined) return;
+    shopReviews(name).then(setOwn).catch(() => setFailed(true));
+  }, [name, data]);
+  const d = data ?? own;
+  if (failed || !d) return null;
+
+  const dist = [5, 4, 3, 2, 1].map((star) => ({ star, n: d.items.filter((r) => r.rating === star).length }));
+  const most = Math.max(1, ...dist.map((x) => x.n));
+  const sorted = [...d.items].sort((a, b) => (sort === "high" ? b.rating - a.rating : sort === "low" ? a.rating - b.rating : 0) || b.created_at.localeCompare(a.created_at));
+
   return (
-    <section className="mt-8">
-      <div className="mb-3 flex items-baseline gap-2 border-b border-line pb-2">
-        <h2 className="text-xl font-extrabold text-brand-dark">구매 후기</h2>
-        {data.average !== null && (
-          <span className="flex items-baseline gap-1.5">
-            <Stars value={data.average} />
-            <b>{data.average.toFixed(1)}</b>
-            <span className="text-sm text-stone-500">({data.count})</span>
-          </span>
-        )}
-      </div>
-      {data.items.length === 0 ? (
-        <p className="break-keep text-stone-500">아직 후기가 없어요. 받아 보신 분은 마이페이지 주문 내역에서 후기를 남길 수 있어요.</p>
+    <section>
+      {d.items.length === 0 ? (
+        <p className="break-keep py-4 text-stone-500">아직 후기가 없어요. 받아 보신 분은 마이페이지 주문 내역에서 후기를 남길 수 있어요.</p>
       ) : (
-        <ul className="divide-y divide-line">
-          {data.items.map((r) => (
-            <li key={r.review_id} className="py-3">
-              <div className="flex flex-wrap items-center gap-x-2 text-sm text-stone-500">
-                <Stars value={r.rating} size="text-sm" />
-                <span className="font-semibold text-stone-700">{r.author}</span>
-                {r.spec && <span>{r.spec}</span>}
-                <span>{r.created_at}</span>
-              </div>
-              {r.text && <p className="mt-1 break-keep">{r.text}</p>}
-            </li>
-          ))}
-        </ul>
+        <>
+          <div className="flex items-center gap-5 border-b border-line pb-4">
+            <div className="shrink-0 text-center">
+              <div className="text-4xl font-extrabold leading-none tabular-nums">{d.average?.toFixed(1)}</div>
+              <Stars value={d.average ?? 0} size="text-sm" />
+              <div className="text-xs text-stone-500">후기 {d.count}개</div>
+            </div>
+            <ul className="min-w-0 flex-1 space-y-1" aria-label="별점별 후기 수">
+              {dist.map(({ star, n }) => (
+                <li key={star} className="flex items-center gap-2 text-xs text-stone-500">
+                  <span className="w-6 shrink-0 tabular-nums">{star}점</span>
+                  <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#e3e8ed]">
+                    <span className="block h-full rounded-full bg-amber-500" style={{ width: `${(n / most) * 100}%` }} />
+                  </span>
+                  <span className="w-5 shrink-0 text-right tabular-nums">{n}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex gap-3 py-2 text-sm" role="group" aria-label="후기 정렬">
+            {SORTS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                aria-pressed={sort === o.value}
+                onClick={() => setSort(o.value)}
+                className={cx("py-1", sort === o.value ? "font-bold text-ink" : "text-stone-500")}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <ul className="divide-y divide-line border-t border-line">
+            {sorted.slice(0, shown).map((r) => (
+              <ReviewItem key={r.review_id} r={r} />
+            ))}
+          </ul>
+          {sorted.length > shown && (
+            <Button block variant="ghost" size="md" className="mt-2" onClick={() => setShown((n) => n + 5)}>
+              후기 더보기 ({sorted.length - shown})
+            </Button>
+          )}
+        </>
       )}
     </section>
+  );
+}
+
+function ReviewItem({ r }: { r: ShopReview }) {
+  const [open, setOpen] = useState(false);
+  const long = r.text.length > 90;
+  return (
+    <li className="py-3">
+      <div className="flex items-center gap-2 text-sm">
+        <Stars value={r.rating} size="text-sm" />
+        <span className="font-semibold text-stone-700">{r.author}</span>
+        <span className="text-stone-400">{r.created_at.slice(0, 10).replace(/-/g, ".")}</span>
+      </div>
+      {r.spec && <div className="mt-0.5 text-xs text-stone-500">구매 규격: {r.spec}</div>}
+      {r.text && (
+        <p className={cx("mt-1.5 whitespace-pre-line break-keep", long && !open && "line-clamp-3")}>{r.text}</p>
+      )}
+      {long && (
+        <button type="button" className="mt-1 text-sm font-semibold text-stone-500" onClick={() => setOpen(!open)}>
+          {open ? "접기" : "더보기"}
+        </button>
+      )}
+    </li>
   );
 }
 
@@ -294,3 +351,89 @@ export function ShareButton({ title, text }: { title: string; text: string }) {
   );
 }
 
+
+// ---------------------------------------------------------------- 가격 · 단위가격 · 도착 예정
+/** 쇼핑몰식 가격: 숫자는 크고 굵게, '원'은 작게 */
+export function Price({ value, className, unitClass }: { value: number; className?: string; unitClass?: string }) {
+  return (
+    <span className={cx("whitespace-nowrap font-extrabold tabular-nums", className)}>
+      {value.toLocaleString("ko-KR")}
+      <span className={cx("ml-0.5 font-bold", unitClass ?? "text-[0.7em]")}>원</span>
+    </span>
+  );
+}
+
+/** 규격 글자('1.8kg', '20kg 말통')에서 내용량 kg을 읽어요. 못 읽으면 null */
+export function specKg(spec: string): number | null {
+  const m = /([\d.]+)\s*(kg|㎏|l|ℓ)/i.exec(spec);
+  const v = m ? Number(m[1]) : NaN;
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+/** 1kg당 가격 (쿠팡의 '100g당 ○원' 자리). 계산이 안 되면 null */
+export function perKg(price: number | null, spec: string): number | null {
+  const kg = specKg(spec);
+  if (price === null || !kg) return null;
+  return Math.round(price / kg / 10) * 10;
+}
+
+/** 오늘 주문하면 가장 빨리 받는 날 — 준비일과 쉬는 요일을 건너뛰어요 */
+export function arriveDate(info: ShopInfo, leadDays: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + (Number.isFinite(leadDays) ? leadDays : 1));
+  for (let i = 0; i < 7 && info.closed_weekdays.includes((d.getDay() + 6) % 7); i++) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+export function arriveText(info: ShopInfo, leadDays: number): string {
+  const d = arriveDate(info, leadDays);
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() - new Date(new Date().toDateString()).getTime()) / 86_400_000);
+  return `${diff === 1 ? "내일 " : diff === 2 ? "모레 " : ""}${dateKo(iso)}`;
+}
+
+// ---------------------------------------------------------------- 맨 위로 · 처음 열 때 자리
+export function BackToTop({ raised }: { raised?: boolean }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const on = () => setShow(window.scrollY > 700);
+    on();
+    window.addEventListener("scroll", on, { passive: true });
+    return () => window.removeEventListener("scroll", on);
+  }, []);
+  if (!show) return null;
+  return (
+    <button
+      type="button"
+      aria-label="맨 위로"
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      className={cx(
+        "fixed right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-line bg-white/95 text-stone-600 shadow-md",
+        raised ? "bottom-36" : "bottom-24",
+      )}
+    >
+      <ArrowUp className="h-5 w-5" />
+    </button>
+  );
+}
+
+/** 서버가 깨어나는 동안 보여 주는 빈 화면 틀 (빙글빙글 대신) */
+export function ShopSkeleton() {
+  return (
+    <div className="min-h-screen bg-paper" aria-busy="true" aria-label="주문서를 여는 중">
+      <div className="h-14 bg-brand" />
+      <div className="mx-auto max-w-lg space-y-3 px-4 pt-6">
+        <div className="skeleton h-7 w-3/4" />
+        <div className="skeleton h-7 w-1/2" />
+        <div className="skeleton mt-6 h-24 w-full" />
+        <div className="mt-6 rounded-lg border border-line bg-white p-4">
+          <div className="skeleton h-6 w-1/3" />
+          <div className="skeleton mt-4 h-4 w-full" />
+          <div className="skeleton mt-2 h-4 w-5/6" />
+          <div className="skeleton mt-2 h-4 w-2/3" />
+        </div>
+        <p className="pt-4 text-center text-sm text-stone-500">주문서를 여는 중이에요. 처음엔 1분쯤 걸릴 수 있어요.</p>
+      </div>
+    </div>
+  );
+}

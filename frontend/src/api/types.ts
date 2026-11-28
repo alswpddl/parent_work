@@ -488,6 +488,7 @@ export interface ShopProduct {
 export interface ShopInfo {
   factory_name: string;
   factory_phone: string;
+  factory_address: string;
   notice: string;
   intro: string;
   contact_hours: string;

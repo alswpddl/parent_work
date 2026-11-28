@@ -7,7 +7,7 @@ import { shopMyOrders, shopPlaceOrderAs } from "../../api/endpoints";
 import type { ShopInfo, ShopProduct } from "../../api/types";
 import { Alert, Button, Field, Input, Modal, Segmented, Stepper, Textarea, cx } from "../../components/ui";
 import { dateKo, won } from "../../lib/format";
-import { AddressField, ProductArt, Row, SectionTitle, joinAddress, type Address } from "./parts";
+import { AddressField, Price, ProductArt, Row, SectionTitle, joinAddress, type Address } from "./parts";
 import { LAST_KEY, MOBILE_RE, WEEK, digits, formatPhone, itemPath, minDueFor, newToken, store, useShop, weekdayOf } from "./store";
 
 const ME_KEY = "shop.me"; // 비회원이 '기억하기'를 고르면 받는 분 정보 저장
@@ -28,6 +28,29 @@ function estimateShipping(shop: ShopInfo, subtotal: number | null, kg: number): 
     return { fee: shop.shipping_fee, note: left > 0 ? `${won(left)} 더 담으면 택배비 무료` : `택배비 ${won(shop.shipping_fee)}` };
   }
   return { fee: null, note: "택배비는 확인 후 안내드려요" };
+}
+
+/** 무료배송까지 남은 금액 막대 (쿠팡·스마트스토어 장바구니 맨 위의 그것) */
+function FreeShipBar({ shop, subtotal }: { shop: ShopInfo; subtotal: number }) {
+  if (!(shop.free_shipping_over > 0 && shop.shipping_fee > 0)) return null;
+  const left = shop.free_shipping_over - subtotal;
+  const pct = Math.min(100, Math.round((subtotal / shop.free_shipping_over) * 100));
+  return (
+    <div className="mt-1 rounded-lg border border-line bg-white px-4 py-3">
+      <p className="text-[15px] font-semibold">
+        {left > 0 ? (
+          <>
+            <span className="text-brine">{won(left)}</span> 더 담으면 택배비 무료
+          </>
+        ) : (
+          <span className="text-parcel">택배비 무료로 보내 드려요</span>
+        )}
+      </p>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#e3e8ed]" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="무료 택배까지">
+        <div className={cx("h-full rounded-full transition-[width] duration-300", left > 0 ? "bg-brine" : "bg-parcel")} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
 }
 
 export default function Cart() {
@@ -161,7 +184,8 @@ export default function Cart() {
 
   return (
     <div>
-      <h1 className="text-2xl font-extrabold">장바구니</h1>
+      <h1 className="sr-only">장바구니</h1>
+      {subtotal !== null && <FreeShipBar shop={shop} subtotal={subtotal} />}
       <div id="f-items" className="mt-3 space-y-2">
         {picked.map(({ p, qty }) => (
           <div key={p.sku} className="rounded-2xl border border-line bg-white p-3">
@@ -173,7 +197,7 @@ export default function Cart() {
                 <div className="font-extrabold leading-tight">
                   {p.name} <span className="text-brand">{p.spec}</span>
                 </div>
-                <div className="mt-1 text-lg font-bold">{p.price !== null ? won(qty * p.price) : `${qty}${p.unit}`}</div>
+                <div className="mt-1 text-lg">{p.price !== null ? <Price value={qty * p.price} /> : <b>{`${qty}${p.unit}`}</b>}</div>
               </div>
               <button aria-label="빼기" className="self-start p-1 text-stone-400" onClick={() => s.setQty(p.sku, 0)}>
                 <Trash2 className="h-5 w-5" />
