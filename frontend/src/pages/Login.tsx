@@ -34,7 +34,7 @@ export default function Login({ onDone }: { onDone: () => void }) {
 
   const key = "flex h-[72px] items-center justify-center rounded-xl border border-line bg-white text-[28px] font-semibold text-ink shadow-card transition-colors hover:bg-stone-50 active:scale-95 active:bg-stone-100";
   return (
-    <div className="flex min-h-screen flex-col bg-paper">
+    <div className="safe-top flex min-h-dvh flex-col bg-paper">
       <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center px-6 py-10">
         <div className="mb-8 text-center">
           <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-white">

@@ -359,7 +359,7 @@ export default function Cart() {
       )}
 
       <div className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 px-4 pt-3 backdrop-blur">
-        <div className="mx-auto max-w-lg">
+        <div className="mx-auto max-w-lg md:max-w-2xl">
           <div className="mb-2 flex items-baseline justify-between gap-2 text-sm">
             <span className="font-semibold">
               {picked.length}가지 · {count}개
