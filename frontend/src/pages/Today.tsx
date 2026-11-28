@@ -1,18 +1,17 @@
 // 오늘의 할당량 — 부모님이 아침에 열어 보는 화면
 // 1) 품목별로 몇 통 만들지 (크게)  2) 주문별 체크리스트 (다 만들면 체크 → 출고대기)  3) 출고 화면으로
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Circle, Globe, Printer, Truck } from "lucide-react";
 import { getSettings, listOrders, stockNeeds, updateOrder } from "../api/endpoints";
 import type { Order } from "../api/types";
 import { useToast } from "../components/Toast";
-import { Alert, Badge, Button, Card, Empty, LoadState, MethodBadge, PageHeader, Segmented, cx } from "../components/ui";
+import { Alert, Badge, Button, Card, Empty, LoadState, MethodBadge, PageHeader, cx } from "../components/ui";
 import { dateKo, kg, num, todayIso } from "../lib/format";
 import { useFeatures } from "../lib/features";
 import { useAction, useAsync, useAutoRefresh } from "../lib/hooks";
 import { needsPayment } from "../lib/orders";
 
-type Range = "today" | "tomorrow" | "all";
 
 interface Line {
   key: string;
@@ -26,25 +25,21 @@ interface Line {
 export default function Today() {
   const toast = useToast();
   const { busy, run } = useAction();
-  const [range, setRange] = useState<Range>("today");
   const list = useAsync(() => listOrders({ status: "접수,출고대기" }), []);
   const { has } = useFeatures();
   const needs = useAsync(
-    () => (has("q4_inventory") ? stockNeeds(range === "today" ? todayIso() : range === "tomorrow" ? todayIso(1) : undefined) : Promise.resolve([])),
-    [range],
+    () => (has("q4_inventory") ? stockNeeds(undefined) : Promise.resolve([])),
+    [],
   );
   const settings = useAsync(() => getSettings().catch(() => null), []);
   useAutoRefresh(() => Promise.all([list.refresh(), needs.refresh()]));
   const all = useMemo(() => list.data ?? [], [list.data]);
   const today = todayIso();
-  const until = range === "today" ? today : range === "tomorrow" ? todayIso(1) : null;
 
   const orders = useMemo(() => {
-    const picked = all.filter((o) => (until === null ? true : o.due_date !== null && o.due_date <= until));
-    // 늦은 것 → 날짜 빠른 것 → 날짜 미정 순서
-    return [...picked].sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999") || a.order_id.localeCompare(b.order_id));
-  }, [all, until]);
-  const undated = all.filter((o) => !o.due_date).length;
+    // 받는 날(희망 배송일) 빠른 순 → 날짜 미정은 맨 아래
+    return [...all].sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999") || a.order_id.localeCompare(b.order_id));
+  }, [all]);
 
   const lines = useMemo(() => {
     const m = new Map<string, Line>();
@@ -65,9 +60,18 @@ export default function Today() {
   const totalKg = orders.reduce((a, o) => a + o.order_kg, 0);
   // 하루 최대 작업량 — 아직 안 만든(접수) 주문 무게가 넘치면 경고
   const capacity = settings.data?.daily_capacity_kg ?? 0;
-  const days = range === "today" ? 1 : range === "tomorrow" ? 2 : 0;
-  const leftKg = orders.filter((o) => o.status === "접수").reduce((a, o) => a + o.order_kg, 0);
-  const overCapacity = capacity > 0 && days > 0 && leftKg > capacity * days;
+  // 받는 날까지 남은 일수 × 하루 최대치보다 아직 안 만든 양이 많아지는 첫 날
+  const overload = useMemo(() => {
+    if (capacity <= 0) return null;
+    let left = 0;
+    for (const o of orders) {
+      if (!o.due_date) break;
+      if (o.status === "접수") left += o.order_kg;
+      const days = Math.max(1, Math.round((Date.parse(o.due_date) - Date.parse(today)) / 86400000) + 1);
+      if (left > capacity * days) return { date: o.due_date, kg: left, days };
+    }
+    return null;
+  }, [orders, capacity, today]);
 
   const toggle = (o: Order) =>
     run(o.order_id, async () => {
@@ -92,17 +96,6 @@ export default function Today() {
         }
       />
 
-      <Segmented
-        className="no-print mb-4"
-        value={range}
-        onChange={setRange}
-        options={[
-          { value: "today", label: "오늘까지" },
-          { value: "tomorrow", label: "내일까지" },
-          { value: "all", label: "전부" },
-        ]}
-      />
-
       <LoadState loading={list.loading} error={list.error} onRetry={list.reload} />
 
       {list.data && (
@@ -112,21 +105,16 @@ export default function Today() {
               입금 확인 안 된 웹 주문 {orders.filter(needsPayment).length}건 — 입금 확인 후 보내 주세요. (주문 목록에서 눌러 [입금 확인])
             </Alert>
           )}
-          {overCapacity && (
+          {overload && (
             <Alert tone="warn">
-              {range === "today" ? "오늘" : "내일"}까지 남은 작업 {kg(leftKg)} — 하루 최대 {kg(capacity)}
-              {days > 1 ? ` × ${days}일` : ""}보다 많아요. 미리 만들어 두거나 받는 날을 조정해 주세요.
-            </Alert>
-          )}
-          {range !== "all" && undated > 0 && (
-            <Alert tone="info" action={<Button size="sm" variant="ghost" onClick={() => setRange("all")}>전부 보기</Button>}>
-              받는 날이 안 정해진 주문 {undated}건은 '전부'에서 보여요.
+              {dateKo(overload.date)}까지 남은 작업 {kg(overload.kg)} — 하루 최대 {kg(capacity)}
+              {overload.days > 1 ? ` × ${overload.days}일` : ""}보다 많아요. 미리 만들어 두거나 받는 날을 조정해 주세요.
             </Alert>
           )}
 
           <Card title="품목별로 만들 양">
             {lines.length === 0 ? (
-              <Empty>{range === "today" ? "오늘 보낼 주문이 없어요. 푹 쉬세요." : "만들 주문이 없어요."}</Empty>
+              <Empty>만들 주문이 없어요. 푹 쉬세요.</Empty>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {lines.map((l) => (
