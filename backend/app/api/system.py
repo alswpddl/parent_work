@@ -177,3 +177,15 @@ def purge(body: PurgeIn, ctx: AppContext = Depends(get_ctx)) -> dict:
     if body.confirm.strip() != "삭제":
         raise ValidationFailed("확인 칸에 '삭제'라고 적어 주세요.")
     return purge_orders(ctx, body.order_ids)
+
+
+# ---------------------------------------------------------------- 상품 사진 (누구나 보기)
+@router.get("/public/images/{image_id}", include_in_schema=False)
+def public_image(image_id: str, ctx: AppContext = Depends(get_ctx)):
+    from fastapi.responses import Response
+
+    from ..services.images import images_of
+
+    mime, raw = images_of(ctx).load(image_id)
+    # 사진ID마다 내용이 바뀌지 않으니 1년 캐시
+    return Response(content=raw, media_type=mime, headers={"Cache-Control": "public, max-age=31536000, immutable"})

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 
 from ...api.deps import get_ctx, require_admin
 from ...context import AppContext
@@ -111,3 +112,25 @@ def patch_product(sku: str, body: ProductPatch, ctx: AppContext = Depends(get_ct
     out = ctx.products.by_sku(sku)
     assert out is not None
     return out
+
+
+class ImageIn(BaseModel):
+    data_url: str = Field(default="", max_length=1_300_000)  # 비우면 사진 빼기
+
+
+@router.post("/products/{sku}/image", response_model=list[ProductOut])
+def upload_product_image(sku: str, body: ImageIn, ctx: AppContext = Depends(get_ctx)) -> list[ProductOut]:
+    """사진 올리기 — 이름이 같은 규격(1.8kg·5kg·20kg)에 모두 같은 사진을 넣는다"""
+    from ...services.images import images_of
+
+    p = ctx.products.by_sku(sku)
+    if p is None:
+        raise NotFoundError("품목을 찾을 수 없어요.")
+    url = ""
+    if body.data_url:
+        store = images_of(ctx)
+        url = store.url(store.save(body.data_url))
+    same = [x for x in ctx.products.list() if x.name == p.name]
+    ctx.products.update_many([((x.sku,), {"image_url": url}) for x in same])
+    ctx.logs.write("상품 사진 " + ("바꿈" if url else "뺌"), p.name, f"{len(same)}개 규격")
+    return [ctx.products.by_sku(x.sku) for x in same]  # type: ignore[misc]

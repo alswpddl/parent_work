@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Link2, MessageCircle, Plus, RefreshCw, Send, Unlink } from "lucide-react";
 import { errorMessage } from "../api/client";
@@ -32,6 +32,7 @@ import {
   backupStatus,
   listOrders,
   purgeOrders,
+  uploadProductImage,
 } from "../api/endpoints";
 import type { AppSettings, Customer, Order, Product, SystemStatus } from "../api/types";
 import { PushCard } from "../components/PushCard";
@@ -40,6 +41,7 @@ import { useToast } from "../components/Toast";
 import { Alert, Badge, Button, Card, ConfirmButton, CopyButton, Empty, Field, Input, LoadState, Modal, PageHeader, Segmented, Select, StatusBadge, Textarea, Toggle } from "../components/ui";
 import { useFeatures } from "../lib/features";
 import { dateKo, num, won } from "../lib/format";
+import { shrinkImage } from "../lib/image";
 import { useAction, useAsync } from "../lib/hooks";
 
 type Tab = "basic" | "customers" | "products" | "kakao" | "system";
@@ -525,7 +527,7 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
       {has("q2_web_order") && (
         <>
           {inp("description", "주문서 설명 (한 줄)", "웹 주문서 품목 아래에 보여요. 예) 김장용 추젓")}
-          {inp("image_url", "사진 주소 (선택)", "https:// 로 시작하는 사진 링크. 비우면 그림으로 보여요")}
+          <PhotoField sku={isNew ? "" : v.sku ?? ""} url={v.image_url ?? ""} onChange={(url) => set({ image_url: url })} />
           <Field label="상세 설명 (선택)" hint="상품 화면 아래에 그대로 보여요. 원재료·숙성 기간·맛·보관법·드시는 법 등">
             <Textarea
               className="min-h-[120px]"
@@ -932,6 +934,69 @@ function PurgeCard() {
         </>
       )}
     </Card>
+  );
+}
+
+/** 상품 사진: 휴대폰 사진첩이나 카메라에서 골라 바로 올려요. 이름이 같은 규격에 모두 같은 사진이 들어가요 */
+function PhotoField({ sku, url, onChange }: { sku: string; url: string; onChange: (url: string) => void }) {
+  const toast = useToast();
+  const ref = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const pick = async (file: File) => {
+    setBusy(true);
+    try {
+      const data = await shrinkImage(file);
+      const saved = await uploadProductImage(sku, data);
+      onChange(saved[0]?.image_url ?? "");
+      toast(`사진을 올렸어요. 같은 이름 ${saved.length}개 규격에 모두 들어갔어요.`);
+    } catch (e) {
+      toast(e instanceof Error && !("status" in e) ? e.message : errorMessage(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Field label="상품 사진 (선택)" hint={sku ? "주문서 상품 카드와 상품 화면 맨 위에 보여요. 가로로 찍은 사진이 잘 어울려요." : "품목을 먼저 저장한 뒤에 사진을 올릴 수 있어요."}>
+      <div className="flex items-center gap-3">
+        <div className="h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-line bg-stone-100">
+          {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-stone-400">사진 없음</div>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" loading={busy} disabled={!sku} onClick={() => ref.current?.click()}>{url ? "사진 바꾸기" : "사진 올리기"}</Button>
+          {url && sku && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await uploadProductImage(sku, "");
+                  onChange("");
+                } catch (e) {
+                  toast(errorMessage(e), "error");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              사진 빼기
+            </Button>
+          )}
+        </div>
+        <input
+          ref={ref}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void pick(f);
+            e.target.value = "";
+          }}
+        />
+      </div>
+    </Field>
   );
 }
 

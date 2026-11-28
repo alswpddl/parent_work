@@ -253,3 +253,20 @@ def test_push_api(client):
     assert client.post("/api/push/unsubscribe", json={"endpoint": phone.endpoint}).json()["devices"] == 0
     bad = client.post("/api/push/subscribe", json={"endpoint": "http://x.example/aaaaaaaa", "keys": phone.keys})
     assert bad.status_code == 422
+
+
+def test_product_image_upload_and_public_get(client):
+    import base64 as _b64
+
+    prods = client.get("/api/products").json()
+    p = prods[0] if isinstance(prods, list) else prods["products"][0]
+    raw = b"\xff\xd8\xff" + b"jpegdata" * 100
+    r = client.post(f"/api/products/{p['sku']}/image", json={"data_url": "data:image/jpeg;base64," + _b64.b64encode(raw).decode()})
+    assert r.status_code == 200, r.text
+    url = r.json()[0]["image_url"]
+    path = url.split("://", 1)[1].split("/", 1)[1]
+    img = TestClient(client.app).get("/" + path)  # 로그인 없이
+    assert img.status_code == 200 and img.content == raw and img.headers["content-type"] == "image/jpeg"
+    assert "immutable" in img.headers["cache-control"]
+    # 사진 빼기
+    assert client.post(f"/api/products/{p['sku']}/image", json={"data_url": ""}).json()[0]["image_url"] == ""

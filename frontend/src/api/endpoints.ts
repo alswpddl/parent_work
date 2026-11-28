@@ -229,3 +229,5 @@ export const backupStatus = () => api<BackupStatus>("/api/system/backup");
 export const backupNow = () => api<{ ok?: boolean; tab?: string; rows?: number; skipped?: string }>("/api/system/backup", { method: "POST" });
 export const purgeOrders = (order_ids: string[], confirm: string) =>
   api<{ deleted: string[]; skipped: { order_id: string; reason: string }[] }>("/api/system/purge-orders", { method: "POST", body: { order_ids, confirm } });
+export const uploadProductImage = (sku: string, data_url: string) =>
+  api<Product[]>(`/api/products/${encodeURIComponent(sku)}/image`, { method: "POST", body: { data_url } });

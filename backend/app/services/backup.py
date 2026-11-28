@@ -59,7 +59,7 @@ def run_backup(ctx: Any, keep_days: int = KEEP_DAYS) -> dict:
     counts: dict[str, int] = {}
     for spec in ALL_TABS:
         title = spec.title
-        if title not in have:
+        if title not in have or spec.name == "images":  # 사진 조각은 크고 다시 올리면 되니 빼요
             continue
         values = src.get_values(title)
         counts[title] = max(len(values) - 1, 0)
