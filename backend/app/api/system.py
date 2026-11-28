@@ -143,3 +143,49 @@ def google_check(ctx: AppContext = Depends(get_ctx)) -> dict:
 @router.post("/jobs/{job_name}", dependencies=[Depends(require_job_secret)])
 def run_job(job_name: str, ctx: AppContext = Depends(get_ctx)) -> dict:
     return ctx.jobs.run(job_name, ctx)
+
+
+# ---------------------------------------------------------------- 시트 백업
+@router.get("/system/backup", dependencies=[Depends(require_admin)])
+def backup_status(ctx: AppContext = Depends(get_ctx)) -> dict:
+    from ..services.backup import where
+
+    job = next((j for j in ctx.jobs.list() if j.name == "sheet_backup"), None)
+    return {
+        "where": where(ctx),
+        "last_run_at": job.last_run_at.isoformat() if job and job.last_run_at else None,
+        "last_result": job.last_result if job else None,
+    }
+
+
+@router.post("/system/backup", dependencies=[Depends(require_admin)])
+def backup_now(ctx: AppContext = Depends(get_ctx)) -> dict:
+    return ctx.jobs.run("sheet_backup", ctx)
+
+
+# ---------------------------------------------------------------- 테스트 주문 정리
+class PurgeIn(BaseModel):
+    order_ids: list[str] = Field(min_length=1, max_length=500)
+    confirm: str = Field(description="실수 방지: '삭제' 라고 적어야 지워요")
+
+
+@router.post("/system/purge-orders", dependencies=[Depends(require_admin)])
+def purge(body: PurgeIn, ctx: AppContext = Depends(get_ctx)) -> dict:
+    from ..core.errors import ValidationFailed
+    from ..services.purge import purge_orders
+
+    if body.confirm.strip() != "삭제":
+        raise ValidationFailed("확인 칸에 '삭제'라고 적어 주세요.")
+    return purge_orders(ctx, body.order_ids)
+
+
+# ---------------------------------------------------------------- 상품 사진 (누구나 보기)
+@router.get("/public/images/{image_id}", include_in_schema=False)
+def public_image(image_id: str, ctx: AppContext = Depends(get_ctx)):
+    from fastapi.responses import Response
+
+    from ..services.images import images_of
+
+    mime, raw = images_of(ctx).load(image_id)
+    # 사진ID마다 내용이 바뀌지 않으니 1년 캐시
+    return Response(content=raw, media_type=mime, headers={"Cache-Control": "public, max-age=31536000, immutable"})

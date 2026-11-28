@@ -144,11 +144,14 @@ export interface PushStatusOut {
   public_key: string;
   devices: number;
   subscribed: boolean;
+  dev?: boolean; // 서버 오류 알림(개발자용)도 받는지
 }
 export const pushStatus = (endpoint: string) => api<PushStatusOut>("/api/push/status", { method: "POST", body: { endpoint } });
 export const pushSubscribe = (body: { endpoint: string; keys: { p256dh: string; auth: string }; label: string }) =>
   api<PushStatusOut>("/api/push/subscribe", { method: "POST", body });
 export const pushUnsubscribe = (endpoint: string) => api<PushStatusOut>("/api/push/unsubscribe", { method: "POST", body: { endpoint } });
+export const pushSetDev = (endpoint: string, dev: boolean) => api<PushStatusOut>("/api/push/dev", { method: "POST", body: { endpoint, dev } });
+export const pushDevTest = () => api<{ sent: number }>("/api/push/dev-test", { method: "POST" });
 export const pushTest = () => api<{ sent: number; failed: number; removed: number }>("/api/push/test", { method: "POST" });
 export const listMessages = (orderId?: string, limit = 100) => api<MessageLog[]>("/api/messages", { query: { order_id: orderId, limit } });
 
@@ -218,3 +221,16 @@ export const reorderReminders = () => api<ReorderStat[]>("/api/reorder/reminders
 export const reorderStats = () => api<ReorderStat[]>("/api/reorder/stats");
 export const reorderSnooze = (customerId: string, days: number) => api<ReorderStat>(`/api/reorder/${customerId}/snooze`, { body: { days } });
 export const reorderRecompute = () => api<{ updated: number; due: number }>("/api/reorder/recompute", { method: "POST" });
+
+// 구글 시트 백업
+export interface BackupStatus {
+  where: string;
+  last_run_at: string | null;
+  last_result: { ok?: boolean; tab?: string; rows?: number; skipped?: string; error?: string } | null;
+}
+export const backupStatus = () => api<BackupStatus>("/api/system/backup");
+export const backupNow = () => api<{ ok?: boolean; tab?: string; rows?: number; skipped?: string }>("/api/system/backup", { method: "POST" });
+export const purgeOrders = (order_ids: string[], confirm: string) =>
+  api<{ deleted: string[]; skipped: { order_id: string; reason: string }[] }>("/api/system/purge-orders", { method: "POST", body: { order_ids, confirm } });
+export const uploadProductImage = (sku: string, data_url: string) =>
+  api<Product[]>(`/api/products/${encodeURIComponent(sku)}/image`, { method: "POST", body: { data_url } });

@@ -90,8 +90,15 @@ def create_app(
         )
 
     @app.exception_handler(Exception)
-    async def _unknown_error(_: Request, exc: Exception):
+    async def _unknown_error(request: Request, exc: Exception):
         log.exception("처리되지 않은 오류")
+        try:  # 개발자 휴대폰에 '서버 오류' 푸시 (같은 오류는 10분에 한 번)
+            from .services.dev_alert import dev_alert
+
+            where = f"{request.method} {request.url.path}"
+            dev_alert(ctx, "서버 오류", f"{where}\n{type(exc).__name__}: {str(exc)[:200]}", key=f"{where}:{type(exc).__name__}")
+        except Exception:  # noqa: BLE001
+            pass
         return JSONResponse(status_code=500, content={"error": "server", "message": "잠깐 문제가 생겼어요. 다시 눌러 주세요."})
 
     app.include_router(system.router)

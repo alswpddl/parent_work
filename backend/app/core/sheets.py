@@ -109,6 +109,15 @@ class MemoryBackend:
             if 1 < r <= len(sheet):  # 헤더(1행)는 지우지 않음
                 del sheet[r - 1]
 
+    def write_tab(self, title: str, values: list[list[Any]]) -> None:
+        """새 탭을 만들어 값을 통째로 쓴다 (백업용)"""
+        self.calls["write"] += 1
+        self.tabs[title] = [list(r) for r in values]
+
+    def delete_tab(self, title: str) -> None:
+        self.calls["write"] += 1
+        self.tabs.pop(title, None)
+
     def ensure_tab(self, title: str, headers: list[str], text_headers: list[str]) -> list[str]:
         if title not in self.tabs or not self.tabs[title]:
             self.tabs[title] = [list(headers)]
@@ -220,6 +229,23 @@ class GspreadBackend:
             for r in rows
         ]
         self._call(self._sh.batch_update, {"requests": requests})
+
+    def write_tab(self, title: str, values: list[list[Any]]) -> None:
+        """새 탭을 만들어 값을 통째로 쓴다 (백업용). 같은 이름이 있으면 실패하므로 먼저 delete_tab."""
+        width = max((len(r) for r in values), default=1)
+        ws = self._call(self._sh.add_worksheet, title=title, rows=max(len(values), 1) + 5, cols=max(width, 1))
+        clean = [[v if isinstance(v, (int, float, str)) else ("" if v is None else str(v)) for v in r] for r in values]
+        if clean:
+            self._call(ws.update, values=clean, range_name="A1", value_input_option="RAW")
+        self._sheet_ids.pop(title, None)
+
+    def delete_tab(self, title: str) -> None:
+        try:
+            ws = self._call(self._sh.worksheet, title)
+        except Exception:  # 없는 탭
+            return
+        self._call(self._sh.del_worksheet, ws)
+        self._sheet_ids.pop(title, None)
 
     def ensure_tab(self, title: str, headers: list[str], text_headers: list[str]) -> list[str]:
         tabs = self.list_tabs()

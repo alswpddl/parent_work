@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Link2, MessageCircle, Plus, RefreshCw, Send, Unlink } from "lucide-react";
 import { errorMessage } from "../api/client";
@@ -28,13 +28,20 @@ import {
   saveSettings,
   updateCustomer,
   updateProduct,
+  backupNow,
+  backupStatus,
+  listOrders,
+  purgeOrders,
+  uploadProductImage,
 } from "../api/endpoints";
-import type { AppSettings, Customer, Product, SystemStatus } from "../api/types";
+import type { AppSettings, Customer, Order, Product, SystemStatus } from "../api/types";
 import { PushCard } from "../components/PushCard";
+import { DEFAULT_REFUND } from "./shop/Policy";
 import { useToast } from "../components/Toast";
-import { Alert, Badge, Button, Card, ConfirmButton, CopyButton, Empty, Field, Input, LoadState, Modal, PageHeader, Segmented, Select, Textarea, Toggle } from "../components/ui";
+import { Alert, Badge, Button, Card, ConfirmButton, CopyButton, Empty, Field, Input, LoadState, Modal, PageHeader, Segmented, Select, StatusBadge, Textarea, Toggle } from "../components/ui";
 import { useFeatures } from "../lib/features";
 import { dateKo, num, won } from "../lib/format";
+import { shrinkImage } from "../lib/image";
 import { useAction, useAsync } from "../lib/hooks";
 
 type Tab = "basic" | "customers" | "products" | "kakao" | "system";
@@ -159,6 +166,17 @@ function BasicTab() {
           </div>
           {text("contact_hours", "문의 받는 시간", "예) 오전 8시 ~ 오후 4시 — 주문서·챗봇에 보여요")}
           {text("closed_days", "받는 날로 못 고르는 요일", "예) 일 / 토,일 / 없음 — 거래처 주문 링크에도 똑같이 적용돼요")}
+          <div className="mb-3 mt-2 border-t border-line pt-4">
+            <div className="mb-2 font-bold">사업자 정보·약관 (주문서 맨 아래)</div>
+            <p className="mb-3 text-sm text-stone-500">상호·대표자·사업자등록번호·주소·전화는 위 '우리 공장'에 적은 값이 그대로 나와요. 빈 칸은 주문서에서 숨겨요.</p>
+            <div className="grid gap-x-3 md:grid-cols-2">
+              {text("mail_order_no", "통신판매업 신고번호", "예) 제2026-경남통영-0000호 · 신고 면제면 비워 두기")}
+              {text("privacy_officer", "개인정보 보호책임자", "예) 최갑열 055-641-6882 · 비우면 대표자·전화")}
+            </div>
+            <Field label="교환·반품 안내" hint="한 줄에 한 가지씩. 비워 두면 아래 기본 문구가 나와요.">
+              <Textarea rows={5} value={v.refund_policy ?? ""} placeholder={DEFAULT_REFUND} onChange={(e) => set({ refund_policy: e.target.value })} />
+            </Field>
+          </div>
           <p className="text-sm text-stone-500">받는 날은 품목마다 적은 '준비일'을 따르고, 비어 있으면 위 '거래처 셀프 주문'의 최소 준비일을 써요. 입금 계좌는 주문 완료 화면에 보여요.</p>
         </Card>
       )}
@@ -509,7 +527,7 @@ function ProductModal({ value, busy, onClose, onSave }: { value: Partial<Product
       {has("q2_web_order") && (
         <>
           {inp("description", "주문서 설명 (한 줄)", "웹 주문서 품목 아래에 보여요. 예) 김장용 추젓")}
-          {inp("image_url", "사진 주소 (선택)", "https:// 로 시작하는 사진 링크. 비우면 그림으로 보여요")}
+          <PhotoField sku={isNew ? "" : v.sku ?? ""} url={v.image_url ?? ""} onChange={(url) => set({ image_url: url })} />
           <Field label="상세 설명 (선택)" hint="상품 화면 아래에 그대로 보여요. 원재료·숙성 기간·맛·보관법·드시는 법 등">
             <Textarea
               className="min-h-[120px]"
@@ -786,6 +804,202 @@ function TossCard() {
   );
 }
 
+/** 구글 시트 매일 백업 (새벽 3시 30분 자동, 14일 보관) + 지금 백업 버튼 */
+function BackupCard() {
+  const toast = useToast();
+  const st = useAsync(backupStatus, []);
+  const [busy, setBusy] = useState(false);
+  const d = st.data;
+  const last = d?.last_result;
+  return (
+    <Card title="시트 백업">
+      <p className="mb-3 break-keep text-stone-600">
+        매일 새벽 3시 30분에 주문장·거래처·품목·저장소·후기·설정을 날짜별 탭으로 복사해 두고, 14일 지난 것은 지워요.
+      </p>
+      {d && !d.where && (
+        <Alert tone="warn">
+          백업할 시트가 아직 없어요. 구글 시트를 새로 하나 만들어 서비스 계정에 <b>편집자</b>로 공유하고, 그 시트 ID를 Render의 <b>BACKUP_SPREADSHEET_ID</b>에 넣어 주세요.
+        </Alert>
+      )}
+      {d?.where && <p className="mb-2 text-[15px]">백업 위치: <b>{d.where}</b></p>}
+      {last && (
+        <p className="mb-3 text-[15px] text-stone-600">
+          마지막 백업: {d?.last_run_at ? dateKo(d.last_run_at.slice(0, 10)) : "-"} ·{" "}
+          {last.skipped ? last.skipped : last.ok === false ? `실패 (${last.error ?? ""})` : `${last.tab} (${(last.rows ?? 0).toLocaleString("ko-KR")}줄)`}
+        </p>
+      )}
+      <Button
+        size="md"
+        variant="ghost"
+        loading={busy}
+        disabled={!d?.where}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            const r = await backupNow();
+            toast(r.skipped ? r.skipped : `백업했어요: ${r.tab}`, r.skipped ? "error" : "ok");
+            void st.reload();
+          } catch (e) {
+            toast(errorMessage(e), "error");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        지금 백업하기
+      </Button>
+    </Card>
+  );
+}
+
+/** 시험으로 넣은 주문 지우기 — 골라서 '삭제'라고 적고 누르면 취소(재고 되돌림) 뒤 장부에서 지워요 */
+function PurgeCard() {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const list = useAsync(() => (open ? listOrders({ include_cancelled: true }) : Promise.resolve([] as Order[])), [open]);
+  const [pick, setPick] = useState<Set<string>>(new Set());
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const orders = [...(list.data ?? [])].sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+  const toggle = (id: string) => setPick((p) => {
+    const n = new Set(p);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  });
+  return (
+    <Card title="테스트 주문 정리">
+      <p className="mb-3 break-keep text-stone-600">
+        연습으로 넣은 주문을 장부에서 완전히 지워요. 먼저 취소 처리돼서 재고가 원래대로 돌아오고, 카드 결제였으면 환불돼요. 월말 정산에 들어간 주문은 지울 수 없어요.
+      </p>
+      {!open ? (
+        <Button size="md" variant="ghost" onClick={() => setOpen(true)}>주문 목록 열기</Button>
+      ) : (
+        <>
+          <LoadState loading={list.loading} error={list.error} onRetry={list.reload} />
+          {list.data && (
+            <>
+              <div className="mb-2 flex items-center justify-between gap-2 text-[15px]">
+                <span>{orders.length}건 중 <b>{pick.size}건</b> 골랐어요</span>
+                <span className="flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => setPick(new Set(orders.map((o) => o.order_id)))}>전부 고르기</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setPick(new Set())}>모두 풀기</Button>
+                </span>
+              </div>
+              <div className="max-h-[360px] overflow-y-auto rounded-xl border border-line">
+                {orders.length === 0 && <p className="p-4 text-stone-500">주문이 없어요.</p>}
+                {orders.map((o) => (
+                  <label key={o.order_id} className="flex cursor-pointer items-start gap-3 border-b border-line px-3 py-2.5 last:border-0 hover:bg-stone-50">
+                    <input type="checkbox" className="mt-1 h-5 w-5 accent-brand" checked={pick.has(o.order_id)} onChange={() => toggle(o.order_id)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-x-2">
+                        <b>{o.customer_name}</b>
+                        <StatusBadge status={o.status} />
+                        <span className="text-sm text-stone-500">{o.order_id}</span>
+                      </span>
+                      <span className="block truncate text-sm text-stone-500">
+                        {o.created_at ? dateKo(String(o.created_at).slice(0, 10)) : ""} · {o.lines.map((l) => `${l.product_name} ${l.qty}`).join(", ")}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <Field label="확인" hint="실수 방지: 아래 칸에 '삭제'라고 적어야 버튼이 눌려요">
+                <Input value={confirm} placeholder="삭제" onChange={(e) => setConfirm(e.target.value)} />
+              </Field>
+              <Button
+                variant="danger"
+                block
+                loading={busy}
+                disabled={!pick.size || confirm.trim() !== "삭제"}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    const r = await purgeOrders([...pick], confirm);
+                    toast(`${r.deleted.length}건을 지웠어요.${r.skipped.length ? ` ${r.skipped.length}건은 못 지웠어요: ${r.skipped.map((x) => x.reason).join(" / ")}` : ""}`, r.skipped.length ? "error" : "ok");
+                    setPick(new Set());
+                    setConfirm("");
+                    void list.reload();
+                  } catch (e) {
+                    toast(errorMessage(e), "error");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                고른 {pick.size}건 완전히 지우기
+              </Button>
+            </>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+/** 상품 사진: 휴대폰 사진첩이나 카메라에서 골라 바로 올려요. 이름이 같은 규격에 모두 같은 사진이 들어가요 */
+function PhotoField({ sku, url, onChange }: { sku: string; url: string; onChange: (url: string) => void }) {
+  const toast = useToast();
+  const ref = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const pick = async (file: File) => {
+    setBusy(true);
+    try {
+      const data = await shrinkImage(file);
+      const saved = await uploadProductImage(sku, data);
+      onChange(saved[0]?.image_url ?? "");
+      toast(`사진을 올렸어요. 같은 이름 ${saved.length}개 규격에 모두 들어갔어요.`);
+    } catch (e) {
+      toast(e instanceof Error && !("status" in e) ? e.message : errorMessage(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Field label="상품 사진 (선택)" hint={sku ? "주문서 상품 카드와 상품 화면 맨 위에 보여요. 가로로 찍은 사진이 잘 어울려요." : "품목을 먼저 저장한 뒤에 사진을 올릴 수 있어요."}>
+      <div className="flex items-center gap-3">
+        <div className="h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-line bg-stone-100">
+          {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-sm text-stone-400">사진 없음</div>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" loading={busy} disabled={!sku} onClick={() => ref.current?.click()}>{url ? "사진 바꾸기" : "사진 올리기"}</Button>
+          {url && sku && (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await uploadProductImage(sku, "");
+                  onChange("");
+                } catch (e) {
+                  toast(errorMessage(e), "error");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              사진 빼기
+            </Button>
+          )}
+        </div>
+        <input
+          ref={ref}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void pick(f);
+            e.target.value = "";
+          }}
+        />
+      </div>
+    </Field>
+  );
+}
+
 function SystemTab() {
   const s = useAsync(getSystemStatus, []);
   return (
@@ -794,6 +1008,8 @@ function SystemTab() {
       {s.data && (
         <>
           <GoogleCard g={s.data.google} />
+          <BackupCard />
+          <PurgeCard />
           {s.data.kakao_bot && <KakaoBotCard b={s.data.kakao_bot} />}
           <TossCard />
           <Card title="연결 상태">

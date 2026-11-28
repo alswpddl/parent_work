@@ -313,8 +313,22 @@ TANKS = TabSpec(
     ),
 )
 
+# 상품 사진 (관리자 화면에서 올린 것) — 사진 한 장을 4만 자씩 잘라 여러 줄에 나눠 담는다 (칸 하나는 5만 자까지)
+IMAGES = TabSpec(
+    name="images",
+    title="_사진",
+    key_fields=("image_id", "part"),
+    columns=(
+        C("image_id", "사진ID"),
+        C("part", "조각", "int"),
+        C("mime", "형식"),
+        C("data", "내용(base64)", text=True),
+        C("created_at", "올린일시", "datetime"),
+    ),
+)
+
 ALL_TABS: tuple[TabSpec, ...] = (
-    ORDERS, CUSTOMERS, PRODUCTS, INVENTORY, SETTLEMENTS, SETTINGS, LOGS, MARKET_MAP, STOCK_MOVES, TANKS, REVIEWS,
+    ORDERS, CUSTOMERS, PRODUCTS, INVENTORY, SETTLEMENTS, SETTINGS, LOGS, MARKET_MAP, STOCK_MOVES, TANKS, REVIEWS, IMAGES,
 )
 
 # ---------------------------------------------------------------------------

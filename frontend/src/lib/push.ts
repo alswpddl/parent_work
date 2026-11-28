@@ -1,6 +1,6 @@
 // 관리자 앱 휴대폰 알림 (웹 푸시)
 // 아침 브리핑·새 주문·재고 경고가 카톡 '나와의 채팅'(울리지 않음)과 함께 이 휴대폰에도 '띵' 하고 와요.
-import { pushStatus, pushSubscribe, pushUnsubscribe } from "../api/endpoints";
+import { pushSetDev, pushStatus, pushSubscribe, pushUnsubscribe } from "../api/endpoints";
 
 export type PushState =
   | "unsupported" // 이 브라우저는 알림을 못 받음
@@ -82,4 +82,19 @@ export async function disablePush(): Promise<PushState> {
     await sub.unsubscribe();
   }
   return "off";
+}
+
+/** 이 휴대폰이 서버 오류 알림(개발자용)도 받는지 */
+export async function devAlerts(): Promise<boolean> {
+  const reg = await navigator.serviceWorker.getRegistration("/");
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) return false;
+  return !!(await pushStatus(sub.endpoint)).dev;
+}
+
+export async function setDevAlerts(dev: boolean): Promise<boolean> {
+  const reg = await navigator.serviceWorker.getRegistration("/");
+  const sub = await reg?.pushManager.getSubscription();
+  if (!sub) throw new Error("이 휴대폰 알림을 먼저 켜 주세요.");
+  return !!(await pushSetDev(sub.endpoint, dev)).dev;
 }

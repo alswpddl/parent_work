@@ -127,7 +127,7 @@ def build_context(
     service = OrderService(
         orders=orders_repo, customers=customers, products=products, settings=settings, logs=logs, bus=bus
     )
-    return AppContext(
+    ctx = AppContext(
         config=config,
         sheets=sheets,
         system_sheets=system_sheets,
@@ -151,6 +151,10 @@ def build_context(
         orders=service,
         system_tab_specs=(tok_spec, msg_spec),
     )
+    from .services.backup import run_backup
+
+    ctx.jobs.register("sheet_backup", run_backup, cron="30 3 * * *", description="구글 시트 매일 백업 (14일 보관)", module="core")
+    return ctx
 
 
 def bootstrap(ctx: AppContext) -> dict:
