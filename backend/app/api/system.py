@@ -44,6 +44,7 @@ class FeaturesOut(BaseModel):
     env: str
     integrations: IntegrationsOut
     public_web_url: str
+    public_shop_url: str = ""  # 손님 주문서 링크 (관리자 화면의 "주문서 주소 복사"에 씀)
 
 
 @router.get("/system/features", response_model=FeaturesOut)
@@ -63,6 +64,7 @@ def features(request: Request, ctx: AppContext = Depends(get_ctx)) -> FeaturesOu
             toss_test=ctx.config.toss_enabled and ctx.config.toss_test_mode,
         ),
         public_web_url=ctx.config.public_web_url,
+        public_shop_url=ctx.config.shop_link(""),
     )
 
 

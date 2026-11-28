@@ -143,8 +143,9 @@ def hide_review(review_id: str, hidden: bool = Query(...), ctx: AppContext = Dep
 
 
 # ---------------------------------------------------------------- 카카오 로그인
-def _web(ctx: AppContext) -> str:
-    return (ctx.config.public_web_url or "").rstrip("/")
+def _my(ctx: AppContext) -> str:
+    """손님 마이페이지 주소 (손님 전용 주소가 있으면 그쪽)"""
+    return ctx.config.shop_link("/my")
 
 
 @router.get("/auth/kakao/start", include_in_schema=False)
@@ -152,22 +153,22 @@ def kakao_start(ctx: AppContext = Depends(get_ctx)) -> RedirectResponse:
     try:
         return RedirectResponse(ctx.services["web_order"].kakao_start_url(), status_code=302)
     except AppError as e:
-        return RedirectResponse(f"{_web(ctx)}/shop/my#kerr={quote(str(e))}", status_code=302)
+        return RedirectResponse(f"{_my(ctx)}#kerr={quote(str(e))}", status_code=302)
 
 
 @router.get("/auth/kakao/callback", include_in_schema=False)
 def kakao_callback(code: str = "", state: str = "", error: str = "", ctx: AppContext = Depends(get_ctx)) -> RedirectResponse:
     """카카오가 돌려보내는 곳 → 결과를 주소 # 뒤에 붙여 웹 주문서 마이페이지로 (서버 기록에 안 남게)"""
-    web = _web(ctx)
+    web = _my(ctx)
     if error or not code:
-        return RedirectResponse(f"{web}/shop/my#kerr={quote('카카오 로그인을 취소했어요.')}", status_code=302)
+        return RedirectResponse(f"{web}#kerr={quote('카카오 로그인을 취소했어요.')}", status_code=302)
     try:
         r = ctx.services["web_order"].kakao_callback(code, state)
     except AppError as e:
-        return RedirectResponse(f"{web}/shop/my#kerr={quote(str(e))}", status_code=302)
+        return RedirectResponse(f"{web}#kerr={quote(str(e))}", status_code=302)
     if r.token:
-        return RedirectResponse(f"{web}/shop/my#kt={quote(r.token)}", status_code=302)
-    return RedirectResponse(f"{web}/shop/my#kn={quote(r.ticket)}&nick={quote(r.nickname)}", status_code=302)
+        return RedirectResponse(f"{web}#kt={quote(r.token)}", status_code=302)
+    return RedirectResponse(f"{web}#kn={quote(r.ticket)}&nick={quote(r.nickname)}", status_code=302)
 
 
 @router.post("/auth/kakao/complete", response_model=AuthOut, status_code=201)

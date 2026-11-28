@@ -20,6 +20,7 @@ import { Alert, Button, Empty, Field, Input, Modal, Segmented, Spinner, Textarea
 import { won } from "../../lib/format";
 import { AddressField, PayGuide, PayStatus, STATUS, StarPicker, StatusSteps, joinAddress, trackUrl, type Address } from "./parts";
 import { MOBILE_RE, digits, formatPhone, useShop } from "./store";
+import { SHOP_HOME, SP } from "../../lib/host";
 
 export default function My() {
   const s = useShop();
@@ -87,7 +88,7 @@ function KakaoComplete({ ticket, nickname, onCancel }: { ticket: string; nicknam
     try {
       s.signIn(await shopKakaoComplete({ ticket, name: v.name.trim(), phone: formatPhone(v.phone), company: v.company.trim(), password: v.password, agree_privacy: true }));
       onCancel();
-      nav("/shop/my");
+      nav(`${SP}/my`);
     } catch (e) {
       const msg = errorMessage(e);
       if (msg.includes("비밀번호")) setNeedPw(true);
@@ -149,9 +150,9 @@ function Auth({ kakaoError }: { kakaoError: string }) {
           { value: "signup", label: "처음이에요" },
         ]}
       />
-      {tab === "login" ? <LoginForm onDone={() => nav("/shop/my")} /> : <SignupForm onDone={() => nav("/shop/my")} privacy={s.info?.privacy_text ?? ""} />}
+      {tab === "login" ? <LoginForm onDone={() => nav(`${SP}/my`)} /> : <SignupForm onDone={() => nav(`${SP}/my`)} privacy={s.info?.privacy_text ?? ""} />}
       <p className="mt-6 text-center text-sm text-stone-500">
-        가입 없이 주문했다면 <Link to="/shop/lookup" className="font-bold text-brand underline">주문번호로 조회</Link>
+        가입 없이 주문했다면 <Link to={`${SP}/lookup`} className="font-bold text-brand underline">주문번호로 조회</Link>
         {s.info?.factory_phone && <> · 비밀번호를 잊었으면 {s.info.factory_phone}로 전화 주세요</>}
       </p>
     </div>
@@ -264,7 +265,7 @@ function MyPage() {
           <div className="truncate text-2xl font-bold text-ink">{p.name}님</div>
           <div className="text-sm text-stone-500">{p.phone}</div>
         </div>
-        <Button size="sm" variant="ghost" className="shrink-0" icon={<LogOut className="h-4 w-4" />} onClick={() => { s.signOut(); nav("/shop"); }}>
+        <Button size="sm" variant="ghost" className="shrink-0" icon={<LogOut className="h-4 w-4" />} onClick={() => { s.signOut(); nav(SHOP_HOME); }}>
           로그아웃
         </Button>
       </div>
@@ -327,7 +328,7 @@ function Orders() {
     const n = s.addMany(o.lines.map((l) => ({ sku: l.sku, qty: l.qty })));
     if (!n) return toast("지금은 주문할 수 없는 품목이에요 (품절이거나 판매 중지).", "error");
     toast(n < o.lines.length ? `${n}가지를 담았어요. 품절된 품목은 뺐어요.` : "장바구니에 담았어요.");
-    nav("/shop/cart");
+    nav(`${SP}/cart`);
   };
 
   if (err) return <Alert tone="error">{err}</Alert>;
@@ -336,7 +337,7 @@ function Orders() {
     return (
       <Empty>
         아직 주문이 없어요.
-        <div className="mt-3"><Link to="/shop"><Button>상품 보러 가기</Button></Link></div>
+        <div className="mt-3"><Link to={SHOP_HOME}><Button>상품 보러 가기</Button></Link></div>
       </Empty>
     );
   const counts = Object.fromEntries(FILTERS.map((f) => [f.value, list.filter(f.test).length]));
@@ -391,7 +392,7 @@ function Orders() {
             {!o.paid && o.status !== "취소" && (
               <div className="mt-3 space-y-2">
                 {s.info?.pay_client_key && o.total !== null && (
-                  <Link to={`/shop/pay/${encodeURIComponent(o.order_id)}`} className="block">
+                  <Link to={`${SP}/pay/${encodeURIComponent(o.order_id)}`} className="block">
                     <Button block size="lg" icon={<CreditCard className="h-5 w-5" />}>카드·간편결제로 {won(o.total)} 결제하기</Button>
                   </Link>
                 )}

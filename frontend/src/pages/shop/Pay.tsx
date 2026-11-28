@@ -15,6 +15,7 @@ import { won } from "../../lib/format";
 import { makeWidgets, recallPayAccess, rememberPayAccess, type TossWidgets } from "../../lib/toss";
 import { PayStatus, Row, StatusSteps } from "./parts";
 import { useShop } from "./store";
+import { SP } from "../../lib/host";
 
 export function Pay({ orderId }: { orderId: string }) {
   const s = useShop();
@@ -57,7 +58,7 @@ export function Pay({ orderId }: { orderId: string }) {
     setPaying(true);
     setError("");
     try {
-      const base = `${window.location.origin}/shop/pay`;
+      const base = `${window.location.origin}${SP}/pay`;
       await widgets.current.requestPayment({
         orderId: info.order_id,
         orderName: info.order_name,
@@ -138,7 +139,7 @@ export function PaySuccess() {
         <Alert tone="error">{error}</Alert>
         <p className="mb-4 break-keep text-stone-600">돈이 빠져나갔는데 이 화면이 보이면 공장에 연락해 주세요. 승인이 안 된 결제는 자동으로 취소돼요.</p>
         {orderId && (
-          <Link to={`/shop/pay/${encodeURIComponent(orderId)}${recallPayAccess(orderId)}`}>
+          <Link to={`${SP}/pay/${encodeURIComponent(orderId)}${recallPayAccess(orderId)}`}>
             <Button block size="lg">다시 결제하기</Button>
           </Link>
         )}
@@ -160,7 +161,7 @@ export function PaySuccess() {
         <Row k="결제" v={<PayStatus paid={order.paid} status={order.status} />} />
         <Row k="받는 날" v={order.due_date} />
       </div>
-      <Link to="/shop/my">
+      <Link to={`${SP}/my`}>
         <Button block size="lg" variant="ghost">주문 내역 보기</Button>
       </Link>
     </div>
@@ -180,7 +181,7 @@ export function PayFail() {
       {!canceled && <Alert tone="error">{q.get("message") || "결제 중 문제가 생겼어요."}</Alert>}
       <p className="mb-4 break-keep text-stone-600">돈은 빠져나가지 않았어요. 다시 결제하거나 계좌로 입금하셔도 돼요.</p>
       {orderId && (
-        <Button block size="lg" onClick={() => nav(`/shop/pay/${encodeURIComponent(orderId)}${recallPayAccess(orderId)}`)}>
+        <Button block size="lg" onClick={() => nav(`${SP}/pay/${encodeURIComponent(orderId)}${recallPayAccess(orderId)}`)}>
           다시 결제하기
         </Button>
       )}

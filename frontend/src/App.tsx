@@ -6,6 +6,7 @@ import type { Features } from "./api/types";
 import { Alert, Button, Spinner } from "./components/ui";
 import AdminLayout from "./layouts/AdminLayout";
 import { FeaturesProvider } from "./lib/features";
+import { isShopHost } from "./lib/host";
 import Home from "./pages/Home";
 import Inventory from "./pages/Inventory";
 import Tanks from "./pages/Tanks";
@@ -24,6 +25,15 @@ import Today from "./pages/Today";
 
 export default function App() {
   const location = useLocation();
+  // 손님 주문서 전용 주소: 관리자 화면 없이 주문서(+ 거래처 셀프주문)만
+  if (isShopHost()) {
+    return (
+      <Routes>
+        <Route path="/order/:token" element={<SelfOrder />} />
+        <Route path="*" element={<ShopApp />} />
+      </Routes>
+    );
+  }
   // 고객용 화면(거래처 셀프주문, 웹 주문서)은 로그인·기능목록 없이 바로 띄운다
   if (location.pathname.startsWith("/order/") || location.pathname === "/shop" || location.pathname.startsWith("/shop/")) {
     return (

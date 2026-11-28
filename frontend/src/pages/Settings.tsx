@@ -83,7 +83,7 @@ export default function Settings() {
 function BasicTab() {
   const toast = useToast();
   const { has, features } = useFeatures();
-  const shopUrl = `${(features?.public_web_url || window.location.origin).replace(/\/$/, "")}/shop`;
+  const shopUrl = features?.public_shop_url || `${(features?.public_web_url || window.location.origin).replace(/\/$/, "")}/shop`;
   const s = useAsync(getSettings, []);
   const [v, setV] = useState<AppSettings | null>(null);
   const [busy, setBusy] = useState(false);
