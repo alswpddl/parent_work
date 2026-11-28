@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Home as HomeIcon, MapPin, Package, Phone, RotateCcw, Search, ShoppingBasket, Truck, User } from "lucide-react";
 import { errorMessage } from "../../api/client";
-import { shopCancelOrder, shopGuestCode, shopGuestOrders, shopLookup, shopMe, shopMyOrders, shopReviews } from "../../api/endpoints";
+import { shopCancelOrder, shopGuestCode, shopReceived, shopGuestOrders, shopLookup, shopMe, shopMyOrders, shopReviews } from "../../api/endpoints";
 import type { MyOrder, PublicOrder, ShopInfo, ShopReviewList } from "../../api/types";
 import { useToast } from "../../components/Toast";
 import { Alert, Badge, Button, CopyButton, Field, Input, Stepper, cx } from "../../components/ui";
@@ -19,7 +19,7 @@ import Cart from "./Cart";
 import { POLICY_TITLE, PolicyBody, type PolicyKind } from "./Policy";
 import My from "./My";
 import { Pay, PayFail, PaySuccess } from "./Pay";
-import { BackToTop, LabelTable, PayGuide, PayStatus, Price, ProductArt, ReviewsSection, Row, STATUS, ShareButton, ShopSkeleton, Stars, StatusSteps, arriveText, perKg, trackUrl } from "./parts";
+import { BackToTop, LabelTable, PayGuide, PayStatus, Price, ProductArt, ReviewsSection, Row, ShareButton, ShopSkeleton, Stars, StatusSteps, arriveText, stepLabel, perKg, trackUrl } from "./parts";
 import { LAST_KEY, MOBILE_RE, ShopProvider, digits, formatPhone, groupProducts, itemPath, store, useShop, type ProductGroup } from "./store";
 import { SHOP_HOME, SP, isShopHost } from "../../lib/host";
 
@@ -935,17 +935,16 @@ function GuestOrderCard({ initial, phone4 }: { initial: PublicOrder; phone4: str
   const s = useShop();
   const [r, setR] = useState(initial);
   const [error, setError] = useState("");
-  const st = STATUS[r.status] ?? { label: r.status, tone: "violet" as const, step: 1 };
   return (
     <div className="rounded-2xl border border-line bg-white p-5 shadow-card">
       <div className="mb-3">
         <div className="text-sm text-stone-500 tabular-nums">주문번호 {r.order_id} · {r.created_at}</div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-lg font-extrabold text-brand-dark">{st.label}</span>
+          <span className="text-lg font-extrabold text-brand-dark">{stepLabel(r.status, r.paid, r.delivered)}</span>
           <PayStatus paid={r.paid} status={r.status} />
         </div>
       </div>
-      <div className="mb-4"><StatusSteps status={r.status} paid={r.paid} /></div>
+      <div className="mb-4"><StatusSteps status={r.status} paid={r.paid} delivered={r.delivered} /></div>
       <dl className="space-y-1">
         <Row k="품목" v={r.items} />
         <Row k="받는 날" v={r.due_date === "날짜 미정" ? "정해지면 알려 드려요" : r.due_date} />
@@ -954,6 +953,22 @@ function GuestOrderCard({ initial, phone4 }: { initial: PublicOrder; phone4: str
         {r.truck_no && <Row k="화물차" v={r.truck_no} />}
       </dl>
       {error && <div className="mt-3"><Alert tone="error">{error}</Alert></div>}
+      {r.status === "출고완료" && !r.delivered && (
+        <Button
+          block
+          size="lg"
+          className="mt-3"
+          onClick={async () => {
+            try {
+              setR(await shopReceived(r.order_id, { phone4 }));
+            } catch (e) {
+              setError(errorMessage(e));
+            }
+          }}
+        >
+          잘 받았어요
+        </Button>
+      )}
       {r.status === "접수" && (
         <Button
           block

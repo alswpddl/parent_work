@@ -20,6 +20,7 @@ export default function OrderCard({ order, onOpen, children, showMethod = true }
             {needsPayment(order) && <Badge tone="amber">입금 전</Badge>}
             {order.source === "웹주문서" && order.paid_at && <Badge tone="green">입금 완료</Badge>}
             {order.status !== "접수" && <StatusBadge status={order.status} />}
+            {order.delivered_at && <Badge tone="green">도착</Badge>}
             <Badge tone={late ? "red" : "gray"}>{dateKo(order.due_date)}{late ? " 지남" : ""}</Badge>
           </div>
         </div>

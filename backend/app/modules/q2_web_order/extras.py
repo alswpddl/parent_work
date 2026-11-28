@@ -170,6 +170,16 @@ class ShopExtrasMixin:
             return "입금이 확인된 주문이라 환불을 위해 공장에 전화해 주세요."
         return ""
 
+    def received_by_customer(self, body: CancelIn, token: str = "", client_ip: str = "") -> PublicOrderOut:
+        """손님이 '잘 받았어요' → 도착. 로그인 손님은 토큰, 비회원은 전화 뒤 4자리"""
+        if not token:
+            key = client_ip or "anon"
+            self.lookup_limiter.check(key)
+            self.lookup_limiter.hit(key)
+        o = self._my_order(body.order_id, token=token, phone4=body.phone4)
+        out = self.ctx.orders.mark_delivered(o.order_id, actor=f"손님:{o.recipient or o.customer_name}")
+        return to_public(out)
+
     def cancel_by_customer(self, body: CancelIn, token: str = "", client_ip: str = "") -> PublicOrderOut:
         if not token:
             key = client_ip or "anon"

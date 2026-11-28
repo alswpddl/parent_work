@@ -118,6 +118,7 @@ function BasicTab() {
           {number("threshold_kg", "화물로 보낼 기준 무게 (kg 이상)")}
           {number("pallet_kg", "파레트 1개당 무게 (kg)")}
           {number("daily_capacity_kg", "하루 최대 작업량 (kg)", "오늘의 할당량이 이보다 많으면 알려줘요. 0 이면 끔")}
+          {number("auto_delivered_days", "자동 도착 처리 (출고 후 며칠)", "손님이 '잘 받았어요'를 안 눌러도 이 날짜가 지나면 '도착'으로. 0 이면 끔")}
         </div>
       </Card>
       <Card title="우리 공장 (상차지·보내는 분·명세서 공급자)">

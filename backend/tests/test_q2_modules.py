@@ -105,5 +105,5 @@ def test_briefing_send_and_disable(full_ctx, http):
 
 def test_all_jobs_registered(full_ctx):
     names = {j.name for j in full_ctx.jobs.list()}
-    assert names == {"morning_briefing", "kakao_token_refresh", "stock_check", "monthly_settlement", "reorder_scan", "sheet_backup"}
+    assert names == {"morning_briefing", "kakao_token_refresh", "stock_check", "monthly_settlement", "reorder_scan", "sheet_backup", "auto_delivered"}
     assert full_ctx.jobs.run("kakao_token_refresh", full_ctx)["refreshed"] is True

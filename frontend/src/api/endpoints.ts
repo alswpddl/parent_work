@@ -121,6 +121,8 @@ export const shopGuestCode = (name: string, phone: string) =>
   api<{ verify_token: string; expires_in: number }>("/api/public/shop/guest/code", { body: { name, phone }, auth: false });
 export const shopGuestOrders = (body: { name: string; phone: string; code: string; verify_token: string }) =>
   api<PublicOrder[]>("/api/public/shop/guest/orders", { body, auth: false });
+export const shopReceived = (orderId: string, by: { token?: string; phone4?: string }) =>
+  api<PublicOrder>("/api/public/shop/orders/received", { body: { order_id: orderId, phone4: by.phone4 || "" }, ...shopAuth(by.token || "") });
 export const shopCancelOrder = (orderId: string, by: { token?: string; phone4?: string }) =>
   api<PublicOrder>("/api/public/shop/orders/cancel", { body: { order_id: orderId, phone4: by.phone4 || "" }, ...shopAuth(by.token || "") });
 export const shopReviews = (name: string) => api<ShopReviewList>("/api/public/shop/reviews", { query: { name }, auth: false });
@@ -234,3 +236,5 @@ export const purgeOrders = (order_ids: string[], confirm: string) =>
   api<{ deleted: string[]; skipped: { order_id: string; reason: string }[] }>("/api/system/purge-orders", { method: "POST", body: { order_ids, confirm } });
 export const uploadProductImage = (sku: string, data_url: string) =>
   api<Product[]>(`/api/products/${encodeURIComponent(sku)}/image`, { method: "POST", body: { data_url } });
+export const setDelivered = (orderId: string, delivered: boolean) =>
+  api<Order>(`/api/shipping/${encodeURIComponent(orderId)}/delivered`, { method: "POST", query: { delivered } });

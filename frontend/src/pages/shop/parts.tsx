@@ -118,15 +118,29 @@ export const STATUS: Record<string, { label: string; tone: "violet" | "amber" | 
   취소: { label: "취소된 주문", tone: "red", step: 0 },
 };
 
-/** 진행 단계: 주문 접수 → 입금 확인 → 포장 → 출발 (지난 단계는 색칠) */
-export function StatusSteps({ status, paid }: { status: string; paid?: boolean }) {
-  const base = STATUS[status]?.step ?? 1;
-  if (!base) return null;
-  const done = base === 1 ? (paid ? 2 : 1) : base + 1; // 포장(출고대기)·출발(출고완료)이면 입금까지 지난 것
+/** 진행 단계: 주문 접수 → 입금 확인 → 포장 → 출발 → 도착 (지난 단계는 색칠) */
+export const STEPS = ["주문 접수", "입금 확인", "포장", "출발", "도착"] as const;
+
+export function stepOf(status: string, paid?: boolean, delivered?: boolean): number {
+  if (status === "취소") return 0;
+  if (status === "출고완료") return delivered ? 5 : 4;
+  if (status === "출고대기") return 3; // 포장 끝 = 입금도 지난 것
+  return paid ? 2 : 1;
+}
+
+/** 단계 이름 (화면 맨 위 굵은 글씨) */
+export function stepLabel(status: string, paid?: boolean, delivered?: boolean): string {
+  if (status === "취소") return "취소된 주문";
+  return ["", "주문 접수", "입금 확인, 곧 포장해요", "포장 끝, 곧 보내요", "보냈어요", "도착했어요"][stepOf(status, paid, delivered)];
+}
+
+export function StatusSteps({ status, paid, delivered }: { status: string; paid?: boolean; delivered?: boolean }) {
+  const done = stepOf(status, paid, delivered);
+  if (!done) return null;
   return (
-    <ol className="grid grid-cols-4 gap-1 text-center text-[13px] font-semibold">
-      {["주문 접수", "입금 확인", "포장", "출발"].map((label, i) => (
-        <li key={label} className={cx("border-b-4 py-1.5", i < done ? "border-brand text-brand" : "border-line text-stone-400")}>
+    <ol className="grid grid-cols-5 gap-1 text-center text-[13px] font-semibold" aria-label={`진행 단계: ${STEPS[done - 1]}`}>
+      {STEPS.map((label, i) => (
+        <li key={label} aria-current={i === done - 1 ? "step" : undefined} className={cx("border-b-4 py-1.5", i < done ? "border-brand text-brand" : "border-line text-stone-400")}>
           {label}
         </li>
       ))}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 
 from ...api.deps import get_ctx, require_admin
@@ -103,3 +103,9 @@ def ship(order_id: str, ctx: AppContext = Depends(get_ctx)) -> OrderOut:
 def unship(order_id: str, ctx: AppContext = Depends(get_ctx)) -> OrderOut:
     """실수로 누른 출고 완료 되돌리기 → order.unshipped 이벤트."""
     return ctx.orders.unship(order_id)
+
+
+@router.post("/shipping/{order_id}/delivered", response_model=OrderOut)
+def delivered(order_id: str, delivered: bool = Query(default=True), ctx: AppContext = Depends(get_ctx)) -> OrderOut:
+    """도착 표시 (또는 되돌리기)"""
+    return ctx.orders.mark_delivered(order_id, delivered)

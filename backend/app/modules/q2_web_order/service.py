@@ -230,6 +230,7 @@ class MyLine(BaseModel):
 class MyOrderOut(BaseModel):
     order_id: str
     created_at: str
+    delivered: bool = False
     status: str
     due_date: str
     ship_method: str
@@ -696,6 +697,7 @@ class WebOrderService(ShopExtrasMixin):
                 order_id=o.order_id,
                 created_at=o.created_at.strftime("%Y.%m.%d %H:%M") if o.created_at else "",
                 status=o.status,
+                delivered=o.delivered_at is not None,
                 due_date=fmt_date_ko(o.due_date) if o.due_date else "가장 빠른 날",
                 ship_method=o.ship_method,
                 lines=[MyLine(sku=l.sku, name=l.product_name, qty=l.qty, amount=l.amount) for l in o.lines],

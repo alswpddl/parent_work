@@ -154,6 +154,10 @@ def build_context(
     from .services.backup import run_backup
 
     ctx.jobs.register("sheet_backup", run_backup, cron="30 3 * * *", description="구글 시트 매일 백업 (14일 보관)", module="core")
+    ctx.jobs.register(
+        "auto_delivered", lambda c: c.orders.auto_deliver(c.settings.load().auto_delivered_days),
+        cron="50 6 * * *", description="출고 며칠 지난 주문을 도착으로", module="core",
+    )
     return ctx
 
 

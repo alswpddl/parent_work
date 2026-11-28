@@ -270,3 +270,10 @@ def test_product_image_upload_and_public_get(client):
     assert "immutable" in img.headers["cache-control"]
     # 사진 빼기
     assert client.post(f"/api/products/{p['sku']}/image", json={"data_url": ""}).json()[0]["image_url"] == ""
+
+
+def test_delivered_routes(client):
+    r = client.post("/api/shipping/NOPE-0000/delivered")
+    assert r.status_code in (404, 422)
+    pub = TestClient(client.app).post("/api/public/shop/orders/received", json={"order_id": "NOPE-0000", "phone4": "1234"})
+    assert pub.status_code in (404, 422)

@@ -125,6 +125,13 @@ def pay_confirm(body: PayConfirmIn, ctx: AppContext = Depends(get_ctx)) -> Publi
 
 
 # ---------------------------------------------------------------- 손님 직접 취소
+@router.post("/orders/received", response_model=PublicOrderOut)
+def order_received(body: CancelIn, request: Request, x_shop_token: str = Header(default=""),
+                   ctx: AppContext = Depends(get_ctx)) -> PublicOrderOut:
+    """손님 '잘 받았어요' (보낸 주문만)"""
+    return ctx.services["web_order"].received_by_customer(body, token=x_shop_token, client_ip=client_ip(request))
+
+
 @router.post("/orders/cancel", response_model=PublicOrderOut)
 def cancel_order(body: CancelIn, request: Request, x_shop_token: str = Header(default=""),
                  ctx: AppContext = Depends(get_ctx)) -> PublicOrderOut:
