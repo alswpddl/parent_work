@@ -95,6 +95,7 @@ class ShopProduct(BaseModel):
 class ShopInfo(BaseModel):
     factory_name: str
     factory_phone: str
+    factory_address: str = ""
     notice: str
     intro: str = ""
     contact_hours: str = ""
@@ -332,6 +333,7 @@ class WebOrderService(ShopExtrasMixin):
         return ShopInfo(
             factory_name=st.factory_name or "주문서",
             factory_phone=st.factory_phone,
+            factory_address=st.factory_address,
             notice=st.shop_notice,
             intro=st.shop_intro,
             contact_hours=st.contact_hours,

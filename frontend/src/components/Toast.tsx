@@ -2,21 +2,27 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 import { cx } from "./ui";
 
 type Kind = "ok" | "error" | "info";
+/** 알림 옆 버튼 (예: '장바구니 보기') */
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
 interface ToastItem {
   id: number;
   text: string;
   kind: Kind;
+  action?: ToastAction;
 }
 
-const Ctx = createContext<(text: string, kind?: Kind) => void>(() => undefined);
+const Ctx = createContext<(text: string, kind?: Kind, action?: ToastAction) => void>(() => undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const seq = useRef(0);
-  const show = useCallback((text: string, kind: Kind = "ok") => {
+  const show = useCallback((text: string, kind: Kind = "ok", action?: ToastAction) => {
     const id = ++seq.current;
-    setItems((xs) => [...xs.slice(-2), { id, text, kind }]);
-    window.setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), kind === "error" ? 5000 : 2800);
+    setItems((xs) => [...xs.slice(-2), { id, text, kind, action }]);
+    window.setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), kind === "error" ? 5000 : action ? 4000 : 2800);
   }, []);
   return (
     <Ctx.Provider value={show}>
@@ -26,11 +32,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             className={cx(
-              "max-w-md rounded-2xl px-5 py-3 text-center text-base font-semibold text-white shadow-lg",
+              "toast-in flex max-w-md items-center gap-4 rounded-2xl px-5 py-3 text-base font-semibold text-white shadow-lg",
+              t.action ? "pointer-events-auto w-full justify-between text-left" : "text-center",
               t.kind === "error" ? "bg-red-700" : t.kind === "info" ? "bg-parcel" : "bg-ink",
             )}
           >
-            {t.text}
+            <span className="min-w-0 break-keep">{t.text}</span>
+            {t.action && (
+              <button
+                type="button"
+                className="shrink-0 font-bold text-amber-300 underline-offset-2 hover:underline"
+                onClick={() => {
+                  t.action?.onClick();
+                  setItems((xs) => xs.filter((x) => x.id !== t.id));
+                }}
+              >
+                {t.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>

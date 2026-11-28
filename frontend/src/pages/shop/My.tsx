@@ -282,6 +282,17 @@ function MyPage() {
   );
 }
 
+type OrderFilter = "all" | "unpaid" | "preparing" | "sent" | "review" | "canceled";
+/** 주문 목록 위 상태 칩 (쿠팡 주문목록의 '배송 중·배송 완료' 거르기와 같은 역할) */
+const FILTERS: { value: OrderFilter; label: string; test: (o: MyOrder) => boolean }[] = [
+  { value: "all", label: "전체", test: () => true },
+  { value: "unpaid", label: "입금 전", test: (o) => !o.paid && o.status !== "취소" },
+  { value: "preparing", label: "준비 중", test: (o) => o.paid && (o.status === "접수" || o.status === "출고대기") },
+  { value: "sent", label: "보냄", test: (o) => o.status === "출고완료" },
+  { value: "review", label: "후기 쓸 주문", test: (o) => o.reviewable.length > 0 },
+  { value: "canceled", label: "취소", test: (o) => o.status === "취소" },
+];
+
 function Orders() {
   const s = useShop();
   const nav = useNavigate();
@@ -299,6 +310,7 @@ function Orders() {
   }, []);
 
   const [reviewing, setReviewing] = useState<{ order: MyOrder; sku: string; name: string } | null>(null);
+  const [filter, setFilter] = useState<OrderFilter>("all");
   const reload = () => shopMyOrders(s.auth!.token).then(setList).catch(() => undefined);
   const cancel = async (o: MyOrder) => {
     if (!window.confirm(`주문 ${o.order_id}을(를) 취소할까요?${o.paid ? " 카드 결제는 자동으로 환불돼요." : ""}`)) return;
@@ -327,9 +339,28 @@ function Orders() {
         <div className="mt-3"><Link to="/shop"><Button>상품 보러 가기</Button></Link></div>
       </Empty>
     );
+  const counts = Object.fromEntries(FILTERS.map((f) => [f.value, list.filter(f.test).length]));
+  const shown = list.filter(FILTERS.find((f) => f.value === filter)?.test ?? (() => true));
   return (
     <div className="space-y-3">
-      {list.map((o) => {
+      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="group" aria-label="주문 상태로 보기">
+        {FILTERS.filter((f) => f.value === "all" || counts[f.value] > 0).map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            aria-pressed={filter === f.value}
+            onClick={() => setFilter(f.value)}
+            className={cx(
+              "shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-bold",
+              filter === f.value ? "border-brand bg-brand text-white" : "border-line bg-white text-stone-600",
+            )}
+          >
+            {f.label} <span className={filter === f.value ? "text-white/80" : "text-stone-400"}>{counts[f.value]}</span>
+          </button>
+        ))}
+      </div>
+      {shown.length === 0 && <Empty>이 상태의 주문은 없어요.</Empty>}
+      {shown.map((o) => {
         const st = STATUS[o.status] ?? { label: o.status, tone: "violet" as const, step: 1 };
         return (
           <div key={o.order_id} className={cx("rounded-lg border bg-white p-4", !o.paid && o.status !== "취소" ? "border-red-200" : "border-line")}>
