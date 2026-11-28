@@ -153,3 +153,41 @@ def test_password_signup_closed_by_default(full_ctx):
     # 주문하면서 비밀번호를 보내도 가입은 안 되고 주문만 들어감
     done = s.place(_body(password="1234", client_token="pw-off"))
     assert done.order_id and not done.token
+
+
+def test_guest_lookup_with_sms_code(full_ctx, http):
+    import re as _re
+
+    from app.modules.q2_web_order.extras import GuestCodeIn, GuestVerifyIn
+
+    s = _svc(full_ctx)
+    assert s.sms_verify_enabled  # 테스트 설정엔 솔라피 키·발신번호가 있음
+    mine = s.place(_body(client_token="g1"))  # 010-7777-8888 로 주문
+    out = s.guest_send_code(GuestCodeIn(name="김 영희", phone="010-7777-8888"), "1.2.3.4")
+    sms = http.by("api.solapi.com")[-1]["json"]["messages"][0]
+    assert sms["to"] == "01077778888" and sms["from"] == "0310000000" and "인증번호" in sms["text"]
+    code = _re.search(r"\[(\d{6})\]", sms["text"]).group(1)
+
+    with pytest.raises(ValidationFailed, match="맞지 않아요"):
+        s.guest_orders(GuestVerifyIn(name="김영희", phone="01077778888", code="000000" if code != "000000" else "111111", verify_token=out.verify_token))
+    with pytest.raises(UnauthorizedError):  # 다른 번호로 표 재사용 불가
+        s.guest_orders(GuestVerifyIn(name="김영희", phone="010-1234-5678", code=code, verify_token=out.verify_token))
+    found = s.guest_orders(GuestVerifyIn(name="김영희", phone="010-7777-8888", code=code, verify_token=out.verify_token))
+    assert [o.order_id for o in found] == [mine.order_id]
+    # 이름이 다르면 같은 번호여도 안 보임
+    assert s.guest_orders(GuestVerifyIn(name="박철수", phone="010-7777-8888", code=code, verify_token=out.verify_token)) == []
+
+
+def test_guest_code_limits_and_off(full_ctx):
+    from app.core.errors import TooManyRequests
+    from app.modules.q2_web_order.extras import GuestCodeIn
+
+    s = _svc(full_ctx)
+    for _ in range(5):
+        s.guest_send_code(GuestCodeIn(name="김영희", phone="010-7777-9999"), "9.9.9.9")
+    with pytest.raises(TooManyRequests):
+        s.guest_send_code(GuestCodeIn(name="김영희", phone="010-7777-9999"), "9.9.9.9")
+    full_ctx.solapi.sender = ""  # 발신번호 없으면 꺼짐 → 주문번호 조회로
+    assert not s.sms_verify_enabled and s.info().sms_verify is False
+    with pytest.raises(ValidationFailed, match="주문번호"):
+        s.guest_send_code(GuestCodeIn(name="김영희", phone="010-7777-1234"))

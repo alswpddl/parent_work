@@ -113,6 +113,7 @@ class ShopInfo(BaseModel):
     pay_test_mode: bool = False  # 테스트 키면 True → 화면에 '테스트 결제' 표시
     kakao_login: bool = False  # 카카오로 시작하기 버튼 보이기
     google_login: bool = False  # 구글로 시작하기 버튼 보이기
+    sms_verify: bool = False  # 비회원 조회를 이름+휴대폰+문자 인증번호로
 
 
 class GuestOrderIn(BaseModel):
@@ -344,6 +345,7 @@ class WebOrderService(ShopExtrasMixin):
             pay_test_mode=self.ctx.config.toss_enabled and self.ctx.config.toss_test_mode,
             kakao_login=self.kakao_login_enabled,
             google_login=self.google_login_enabled,
+            sms_verify=self.sms_verify_enabled,
             min_due_date=self._min_due(st),
             closed_weekdays=closed,
             closed_days_text=", ".join(WEEKDAYS_KO[i] for i in closed),

@@ -24,7 +24,7 @@ from .service import (
     SignupIn,
 )
 
-from .extras import CancelIn, KakaoCompleteIn, ReviewAdminOut, ReviewIn, ReviewList, ReviewOut
+from .extras import CancelIn, GuestCodeIn, GuestCodeOut, GuestVerifyIn, KakaoCompleteIn, ReviewAdminOut, ReviewIn, ReviewList, ReviewOut
 
 router = APIRouter(prefix="/api/public/shop", tags=["public"])
 admin_router = APIRouter(prefix="/api/reviews", tags=["reviews"], dependencies=[Depends(require_admin)])
@@ -80,6 +80,18 @@ def change_password(body: PasswordIn, x_shop_token: str = Header(default=""), ct
 @router.get("/me/orders", response_model=list[MyOrderOut])
 def my_orders(x_shop_token: str = Header(default=""), ctx: AppContext = Depends(get_ctx)) -> list[MyOrderOut]:
     return ctx.services["web_order"].my_orders(x_shop_token)
+
+
+@router.post("/guest/code", response_model=GuestCodeOut)
+def guest_code(body: GuestCodeIn, request: Request, ctx: AppContext = Depends(get_ctx)) -> GuestCodeOut:
+    """비회원 조회: 이름·휴대폰 번호로 문자 인증번호 받기"""
+    return ctx.services["web_order"].guest_send_code(body, client_ip(request))
+
+
+@router.post("/guest/orders", response_model=list[PublicOrderOut])
+def guest_orders(body: GuestVerifyIn, request: Request, ctx: AppContext = Depends(get_ctx)) -> list[PublicOrderOut]:
+    """비회원 조회: 인증번호가 맞으면 그 이름·번호로 한 주문 목록"""
+    return ctx.services["web_order"].guest_orders(body, client_ip(request))
 
 
 @router.get("/orders/lookup", response_model=PublicOrderOut)

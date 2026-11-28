@@ -507,6 +507,7 @@ export interface ShopInfo {
   pay_test_mode: boolean;
   kakao_login: boolean;
   google_login?: boolean;
+  sms_verify?: boolean; // 비회원 조회를 이름+휴대폰+문자 인증번호로
 }
 
 export interface ShopReview {
