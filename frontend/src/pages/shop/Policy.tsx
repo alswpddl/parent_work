@@ -54,7 +54,7 @@ export function PolicyBody({ kind, info }: { kind: PolicyKind; info: ShopInfo })
         <p className="mb-2 break-keep text-[15px] text-stone-600">{name}(이하 '공장')은 손님의 개인정보를 아래와 같이 처리해요.</p>
         <Sec n={1} title="모으는 정보">
           <p>주문할 때: 성함, 상호(선택), 휴대폰 번호, 받는 주소, 요청사항</p>
-          <p>카카오·구글로 로그인할 때: 그 서비스의 회원번호와 이름(별명)</p>
+          <p>카카오·구글·네이버·애플로 로그인할 때: 그 서비스의 회원번호와 이름(별명)</p>
           <p>카드로 결제할 때: 결제 승인 번호 (카드 번호는 결제대행사가 처리하고 공장은 받지 않아요)</p>
         </Sec>
         <Sec n={2} title="쓰는 곳">

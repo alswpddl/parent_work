@@ -324,9 +324,9 @@ export default function Cart() {
         <>
           <SectionTitle>다음부터 편하게 (선택)</SectionTitle>
           <div className="rounded-2xl border border-line bg-white p-4">
-            {(shop.kakao_login || shop.google_login) && (
+            {(shop.kakao_login || shop.google_login || shop.naver_login || shop.apple_login) && (
               <p className="mb-3 break-keep text-[15px] text-stone-600">
-                <Link to={`${SP}/my`} className="font-bold text-brand underline">카카오·구글로 로그인</Link>하고 주문하면 다음부터 주소를 안 적어도 돼요.
+                <Link to={`${SP}/my`} className="font-bold text-brand underline">간편 로그인</Link>하고 주문하면 다음부터 주소를 안 적어도 돼요.
               </p>
             )}
             <label className="flex items-center gap-2 text-stone-600">

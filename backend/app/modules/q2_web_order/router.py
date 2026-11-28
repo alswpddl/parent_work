@@ -213,6 +213,52 @@ def google_callback(code: str = "", state: str = "", error: str = "", ctx: AppCo
     return RedirectResponse(f"{web}#kn={quote(r.ticket)}&nick={quote(r.nickname)}&p=google", status_code=302)
 
 
+def _social_back(ctx: AppContext, p: str, fn) -> RedirectResponse:
+    """소셜 로그인 결과 → 마이페이지 # 뒤에 (서버 기록에 안 남게). 303: 애플처럼 POST 로 와도 GET 으로 넘어가게"""
+    web = _my(ctx)
+    try:
+        r = fn()
+    except AppError as e:
+        return RedirectResponse(f"{web}#kerr={quote(str(e))}&p={p}", status_code=303)
+    if r.token:
+        return RedirectResponse(f"{web}#kt={quote(r.token)}&p={p}", status_code=303)
+    return RedirectResponse(f"{web}#kn={quote(r.ticket)}&nick={quote(r.nickname)}&p={p}", status_code=303)
+
+
+@router.get("/auth/naver/start", include_in_schema=False)
+def naver_start(ctx: AppContext = Depends(get_ctx)) -> RedirectResponse:
+    try:
+        return RedirectResponse(ctx.services["web_order"].naver_start_url(), status_code=302)
+    except AppError as e:
+        return RedirectResponse(f"{_my(ctx)}#kerr={quote(str(e))}&p=naver", status_code=302)
+
+
+@router.get("/auth/naver/callback", include_in_schema=False)
+def naver_callback(code: str = "", state: str = "", error: str = "", ctx: AppContext = Depends(get_ctx)) -> RedirectResponse:
+    if error or not code:
+        return RedirectResponse(f"{_my(ctx)}#kerr={quote('네이버 로그인을 취소했어요.')}&p=naver", status_code=302)
+    return _social_back(ctx, "naver", lambda: ctx.services["web_order"].naver_callback(code, state))
+
+
+@router.get("/auth/apple/start", include_in_schema=False)
+def apple_start(ctx: AppContext = Depends(get_ctx)) -> RedirectResponse:
+    try:
+        return RedirectResponse(ctx.services["web_order"].apple_start_url(), status_code=302)
+    except AppError as e:
+        return RedirectResponse(f"{_my(ctx)}#kerr={quote(str(e))}&p=apple", status_code=302)
+
+
+@router.post("/auth/apple/callback", include_in_schema=False)
+async def apple_callback(request: Request, ctx: AppContext = Depends(get_ctx)) -> RedirectResponse:
+    """애플은 form_post 로 돌려준다 (code·state, 처음 한 번만 user 에 이름)"""
+    from urllib.parse import parse_qs
+
+    f = {k: v[0] for k, v in parse_qs((await request.body()).decode("utf-8", "replace")).items()}
+    if f.get("error") or not f.get("code"):
+        return RedirectResponse(f"{_my(ctx)}#kerr={quote('애플 로그인을 취소했어요.')}&p=apple", status_code=303)
+    return _social_back(ctx, "apple", lambda: ctx.services["web_order"].apple_callback(f["code"], f.get("state", ""), f.get("user", "")))
+
+
 @router.post("/auth/kakao/complete", response_model=AuthOut, status_code=201)
 def kakao_complete(body: KakaoCompleteIn, ctx: AppContext = Depends(get_ctx)) -> AuthOut:
     return ctx.services["web_order"].kakao_complete(body)

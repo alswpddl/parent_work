@@ -277,3 +277,8 @@ def test_delivered_routes(client):
     assert r.status_code in (404, 422)
     pub = TestClient(client.app).post("/api/public/shop/orders/received", json={"order_id": "NOPE-0000", "phone4": "1234"})
     assert pub.status_code in (404, 422)
+def test_apple_callback_form_post(client):
+    r = TestClient(client.app).post("/api/public/shop/auth/apple/callback", data={"error": "user_cancelled_authorize"}, follow_redirects=False)
+    assert r.status_code == 303 and "kerr=" in r.headers["location"] and "p=apple" in r.headers["location"]
+    r = TestClient(client.app).get("/api/public/shop/auth/naver/start", follow_redirects=False)
+    assert r.status_code == 302 and "kerr=" in r.headers["location"]

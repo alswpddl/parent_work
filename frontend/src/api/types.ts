@@ -513,6 +513,8 @@ export interface ShopInfo {
   pay_test_mode: boolean;
   kakao_login: boolean;
   google_login?: boolean;
+  naver_login?: boolean;
+  apple_login?: boolean;
   sms_verify?: boolean; // 비회원 조회를 이름+휴대폰+문자 인증번호로
   business?: Record<string, string>; // 맨 아래 사업자 정보 (상호·대표자·사업자등록번호…)
   refund_policy?: string;

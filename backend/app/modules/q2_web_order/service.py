@@ -113,6 +113,8 @@ class ShopInfo(BaseModel):
     pay_test_mode: bool = False  # 테스트 키면 True → 화면에 '테스트 결제' 표시
     kakao_login: bool = False  # 카카오로 시작하기 버튼 보이기
     google_login: bool = False  # 구글로 시작하기 버튼 보이기
+    naver_login: bool = False  # 네이버로 시작하기
+    apple_login: bool = False  # Apple로 계속하기
     sms_verify: bool = False  # 비회원 조회를 이름+휴대폰+문자 인증번호로
     business: dict[str, str] = {}  # 맨 아래 사업자 정보 (빈 칸은 화면에서 숨김)
     refund_policy: str = ""  # 비면 화면의 기본 문구
@@ -349,6 +351,8 @@ class WebOrderService(ShopExtrasMixin):
             pay_test_mode=self.ctx.config.toss_enabled and self.ctx.config.toss_test_mode,
             kakao_login=self.kakao_login_enabled,
             google_login=self.google_login_enabled,
+            naver_login=self.naver_login_enabled,
+            apple_login=self.apple_login_enabled,
             sms_verify=self.sms_verify_enabled,
             business={
                 "상호": st.factory_name, "대표자": st.company_owner, "사업자등록번호": st.company_biz_no,
@@ -600,8 +604,10 @@ class WebOrderService(ShopExtrasMixin):
             raise ValidationFailed("휴대폰 번호를 확인해 주세요 (예: 010-1234-5678).")
         phone = pretty_phone(body.phone)
         rows = self._rows_by_phone(phone)
-        if any(str(r.get("web_password") or "").startswith("kakao:") for r in rows):
-            raise ValidationFailed("카카오로 가입한 번호예요. [카카오로 시작하기]로 로그인해 주세요.")
+        social = next((p for r in rows for p in ("kakao", "google", "naver", "apple") if str(r.get("web_password") or "").startswith(p + ":")), "")
+        if social:
+            ko = {"kakao": "카카오", "google": "구글", "naver": "네이버", "apple": "애플"}[social]
+            raise ValidationFailed(f"{ko}로 가입한 번호예요. [{ko}로 시작하기]로 로그인해 주세요.")
         if any(r.get("web_password") for r in rows):
             raise ValidationFailed("이미 가입된 번호예요. 로그인해 주세요. 비밀번호를 잊었으면 전화 주세요.")
         # 이름 비교·새 거래처 만들기에 쓰는 임시 값 (검사 없이 만든다)
@@ -675,7 +681,7 @@ class WebOrderService(ShopExtrasMixin):
     def change_password(self, token: str, body: PasswordIn) -> AuthOut:
         c = self.member(token)
         row = self.ctx.customers.get(c.customer_id, fresh=True) or {}
-        kakao_only = str(row.get("web_password") or "").startswith("kakao:")
+        kakao_only = str(row.get("web_password") or "").startswith(("kakao:", "google:", "naver:", "apple:"))  # 소셜 가입: 지금 비밀번호 없음
         if not kakao_only and not check_password(body.old_password, row.get("web_password") or ""):
             raise ValidationFailed("지금 비밀번호가 맞지 않아요.")
         h = hash_password(body.new_password)

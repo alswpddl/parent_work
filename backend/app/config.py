@@ -93,6 +93,12 @@ class AppConfig(BaseModel):
     kakao_client_secret: str = ""
     google_client_id: str = ""  # 손님 구글 로그인 (구글 클라우드 콘솔 → OAuth 클라이언트 ID)
     google_client_secret: str = ""
+    naver_client_id: str = ""  # 손님 네이버 로그인 (네이버 개발자센터 → 애플리케이션 등록)
+    naver_client_secret: str = ""
+    apple_client_id: str = ""  # 손님 애플 로그인: Services ID (예: kr.gayeom.login)
+    apple_team_id: str = ""  # 애플 개발자 Team ID (10자리)
+    apple_key_id: str = ""  # Sign in with Apple 키 ID (10자리)
+    apple_private_key: str = ""  # .p8 파일 내용 (-----BEGIN PRIVATE KEY----- 부터 끝까지)
     allow_password_signup: bool = False  # 휴대폰 번호+비밀번호 새 가입 (본인 확인이 없어 기본은 닫음, 기존 회원 로그인은 됨)
     kakao_redirect_uri: str = ""  # 비우면 {public_api_url}/api/integrations/kakao/callback
 

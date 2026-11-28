@@ -779,7 +779,7 @@ function Lookup() {
         {s.auth ? (
           <>로그인하셨으면 <Link to={`${SP}/my`} className="font-bold text-brand underline">마이페이지</Link>에서 볼 수 있어요.</>
         ) : (
-          <>카카오·구글로 <Link to={`${SP}/my`} className="font-bold text-brand underline">로그인</Link>하면 한 번에 볼 수 있어요.</>
+          <>간편 <Link to={`${SP}/my`} className="font-bold text-brand underline">로그인</Link>하면 한 번에 볼 수 있어요.</>
         )}
       </p>
       {mode === "sms" ? <SmsLookup /> : <OrderNoLookup />}
